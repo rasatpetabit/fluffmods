@@ -132,6 +132,7 @@ installed copy differs.
 
 These ship in the default `RAS list` feed.
 
+- `ask-user-interactively` (`generic`): Ask the user interactively when input is needed.
 - `codex-delegation` (`claude`): Automatically dispatch simple and well-defined coding tasks to Codex.
 - `verify-before-complete` (`generic`): Require local verification before claiming implementation work is done.
 - `protect-user-work` (`generic`): Treat existing uncommitted changes as user-owned.

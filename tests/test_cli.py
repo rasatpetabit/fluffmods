@@ -24,7 +24,9 @@ from fluffmods.cli import (
     display_path,
     infer_enabled_from_text,
     global_guidance_path,
+    load_options_from_feed_dir,
     load_options,
+    main,
     nearest_project_guidance_path,
     project_guidance_paths,
     options_for_agent,
@@ -169,6 +171,16 @@ class ConfigCompileTests(unittest.TestCase):
 
         self.assertIn("codex-delegation", claude_ids)
         self.assertNotIn("codex-delegation", codex_ids)
+
+    def test_ask_user_interactively_is_in_default_feed(self) -> None:
+        feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
+        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        option = next(item for item in all_options if item.option_id == "ask-user-interactively")
+
+        self.assertEqual(option.applies_to, "generic")
+        self.assertEqual(option.label, "Ask the user interactively when input is needed")
+        self.assertIn("Prefer a short question with 2-4 concrete options.", option.body)
+        self.assertIn("two sentences or less", option.body)
 
     def test_options_sort_generic_before_agent_specific_then_alphabetically(self) -> None:
         options = (
@@ -521,6 +533,26 @@ class TargetSelectionTests(unittest.TestCase):
     def test_choose_agent_non_tty_defaults_to_claude(self) -> None:
         with patch("sys.stdin.isatty", return_value=False), patch("sys.stderr", new_callable=StringIO):
             self.assertEqual(choose_agent(None, None), "claude")
+
+    def test_main_starts_feed_refresh_before_target_selection(self) -> None:
+        events = []
+
+        def fake_refresh():
+            events.append("refresh")
+            return None
+
+        def fake_choose(*args, **kwargs):
+            events.append("choose")
+            raise KeyboardInterrupt
+
+        with (
+            patch("fluffmods.cli.start_feed_refresh_thread", side_effect=fake_refresh),
+            patch("fluffmods.cli.choose_guidance_target", side_effect=fake_choose),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
+            self.assertEqual(main([]), 0)
+
+        self.assertEqual(events, ["refresh", "choose"])
 
     def test_nearest_project_guidance_path_finds_claude_parent_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

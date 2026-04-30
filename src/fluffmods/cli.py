@@ -1820,6 +1820,11 @@ def main(argv: list[str] | None = None) -> int:
             print("No enabled remote feeds to refresh.")
         return finish()
 
+    interactive_mode = not (args.status or args.preview or args.apply or args.upgrade)
+    feed_results = None
+    if interactive_mode and not args.no_feed_refresh:
+        feed_results = start_feed_refresh_thread()
+
     try:
         agent, path = choose_guidance_target(
             args.agent,
@@ -1870,7 +1875,6 @@ def main(argv: list[str] | None = None) -> int:
         print_apply_summary(agent, enabled, options)
         return finish()
 
-    feed_results = None if args.no_feed_refresh else start_feed_refresh_thread()
     selected = interactive(path, original, enabled, options, feed_results, current_options)
     if selected is None:
         print("No changes applied.")
