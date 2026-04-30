@@ -61,6 +61,13 @@ class ConfigSettings:
     auto_update_configs: bool = False
 
 
+@dataclass(frozen=True)
+class TargetChoice:
+    agent: str
+    location: str
+    path: Path
+
+
 BUILTIN_OPTIONS: tuple[Option, ...] = (
     Option(
         "codex-delegation",
@@ -226,8 +233,8 @@ def choose_agent(agent_arg: str | None, agent_override: str | None) -> str:
     while True:
         choice = input(
             "Edit which agent guidance?\n"
-            "  1) Claude\n"
-            "  2) Codex\n"
+            f"  1) Claude - {agent_guidance_location('claude')}\n"
+            f"  2) Codex - {agent_guidance_location('codex')}\n"
             "  Q) Quit\n"
             "Selection [1/2/Q, Enter=1]: "
         ).strip().lower()
@@ -240,6 +247,11 @@ def choose_agent(agent_arg: str | None, agent_override: str | None) -> str:
         print("Enter 1 for Claude, 2 for Codex, or Q to quit.")
 
 
+def agent_guidance_location(agent: str) -> str:
+    choice = target_choices((agent,))[0]
+    return f"{choice.location}: {choice.path}"
+
+
 def print_agent_menu(selected_index: int) -> None:
     choices = (("claude", "Claude"), ("codex", "Codex"))
     print("\033[2J\033[H", end="")
@@ -247,8 +259,10 @@ def print_agent_menu(selected_index: int) -> None:
     print("Use ↑/↓ or ←/→ to move, Enter/Space to select, Q to quit.")
     print()
     for index, (_, label) in enumerate(choices):
+        agent = choices[index][0]
         pointer = ">" if index == selected_index else " "
-        print(f"{pointer} {index + 1}) {label}")
+        print(f"{pointer} {label}")
+        print(f"    {agent_guidance_location(agent)}")
 
 
 def choose_agent_interactive() -> str:
@@ -281,6 +295,125 @@ def choose_agent_interactive() -> str:
         if key in {"x"}:
             print("\033[2J\033[H", end="")
             return "codex"
+
+
+def target_choices(agents: tuple[str, ...] = AGENTS, start: Path | None = None) -> tuple[TargetChoice, ...]:
+    choices: list[TargetChoice] = []
+    for agent in agents:
+        global_path = global_guidance_path(agent).expanduser()
+        try:
+            resolved_global = global_path.resolve()
+        except OSError:
+            resolved_global = global_path
+
+        for project_path in project_guidance_paths(agent, start):
+            if project_path == resolved_global:
+                continue
+            choices.append(TargetChoice(agent=agent, location="project", path=project_path))
+
+        location = "global" if global_path.exists() else "global default"
+        choices.append(TargetChoice(agent=agent, location=location, path=global_path))
+    return tuple(choices)
+
+
+def print_target_menu(selected_index: int, choices: tuple[TargetChoice, ...]) -> None:
+    print("\033[2J\033[H", end="")
+    print("? Edit which guidance file?")
+    print("Use ↑/↓ or ←/→ to move, Enter/Space to select, Q to quit.")
+    print()
+    for index, choice in enumerate(choices):
+        pointer = ">" if index == selected_index else " "
+        agent_label = "Claude" if choice.agent == "claude" else "Codex"
+        print(f"{pointer} {agent_label} {choice.location}")
+        print(f"    {choice.path}")
+
+
+def choose_target_interactive(choices: tuple[TargetChoice, ...]) -> TargetChoice:
+    if not choices:
+        raise KeyboardInterrupt
+
+    selected_index = 0
+    while True:
+        print_target_menu(selected_index, choices)
+        key = read_key()
+        if key in {"q", "escape"}:
+            print("\033[2J\033[H", end="")
+            raise KeyboardInterrupt
+        if key in {"enter", "space"}:
+            print("\033[2J\033[H", end="")
+            return choices[selected_index]
+        if key in {"up", "left", "k", "h"}:
+            selected_index = (selected_index - 1) % len(choices)
+            continue
+        if key in {"down", "right", "j", "l", "tab"}:
+            selected_index = (selected_index + 1) % len(choices)
+            continue
+        if key.isdigit():
+            index = int(key) - 1
+            if 0 <= index < len(choices):
+                print("\033[2J\033[H", end="")
+                return choices[index]
+
+
+def choose_target_prompt(choices: tuple[TargetChoice, ...]) -> TargetChoice:
+    while True:
+        lines = ["Edit which guidance file?"]
+        for index, choice in enumerate(choices):
+            agent_label = "Claude" if choice.agent == "claude" else "Codex"
+            lines.append(f"  {index + 1}) {agent_label} {choice.location} - {choice.path}")
+        lines.append("  Q) Quit")
+        default = "1" if choices else "Q"
+        choice = input("\n".join(lines) + f"\nSelection [1-{len(choices)}/Q, Enter={default}]: ").strip().lower()
+        if choice == "" and choices:
+            return choices[0]
+        if choice in {"q", "quit", "exit"}:
+            raise KeyboardInterrupt
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(choices):
+                return choices[index]
+        print(f"Enter a number from 1 to {len(choices)}, or Q to quit.")
+
+
+def choose_guidance_target(
+    agent_arg: str | None,
+    agent_override: str | None,
+    path_arg: str | None,
+    assume_global: bool,
+    assume_project: bool,
+) -> tuple[str, Path]:
+    agent = agent_override or agent_arg
+
+    if path_arg:
+        selected_agent = choose_agent(agent, None)
+        return selected_agent, guidance_path(path_arg, selected_agent)
+
+    if assume_global or assume_project:
+        selected_agent = choose_agent(agent, None)
+        return selected_agent, choose_target_path(
+            None,
+            assume_global=assume_global,
+            assume_project=assume_project,
+            agent=selected_agent,
+        )
+
+    if not sys.stdin.isatty():
+        selected_agent = agent or "claude"
+        if not agent:
+            print(
+                "Agent not specified; defaulting to Claude global guidance. "
+                "Pass --claude, --codex, --project, --global, or --file to choose explicitly.",
+                file=sys.stderr,
+            )
+        return selected_agent, global_guidance_path(selected_agent)
+
+    agents = (agent,) if agent else AGENTS
+    choices = target_choices(agents)
+    if sys.stdout.isatty():
+        choice = choose_target_interactive(choices)
+    else:
+        choice = choose_target_prompt(choices)
+    return choice.agent, choice.path
 
 
 def global_guidance_path(agent: str) -> Path:
@@ -592,17 +725,29 @@ def project_guidance_candidates(directory: Path, agent: str) -> tuple[Path, ...]
     )
 
 
-def nearest_project_guidance_path(agent: str, start: Path | None = None) -> Path | None:
+def project_guidance_paths(agent: str, start: Path | None = None) -> tuple[Path, ...]:
     current = (start or Path.cwd()).resolve()
     if current.is_file():
         current = current.parent
 
+    paths: list[Path] = []
+    seen: set[Path] = set()
     for directory in (current, *current.parents):
         for candidate in project_guidance_candidates(directory, agent):
-            if candidate.exists():
-                return candidate
+            if not candidate.exists():
+                continue
+            resolved = candidate.resolve()
+            if resolved in seen:
+                continue
+            paths.append(resolved)
+            seen.add(resolved)
 
-    return None
+    return tuple(paths)
+
+
+def nearest_project_guidance_path(agent: str, start: Path | None = None) -> Path | None:
+    paths = project_guidance_paths(agent, start)
+    return paths[0] if paths else None
 
 
 def choose_target_path(
@@ -1550,13 +1695,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        agent = choose_agent(args.agent, args.agent_override)
-    except KeyboardInterrupt:
-        print("No changes applied.")
-        return 0
-
-    try:
-        path = choose_target_path(args.file, args.assume_global, args.assume_project, agent)
+        agent, path = choose_guidance_target(
+            args.agent,
+            args.agent_override,
+            args.file,
+            args.assume_global,
+            args.assume_project,
+        )
     except KeyboardInterrupt:
         print("No changes applied.")
         return 0

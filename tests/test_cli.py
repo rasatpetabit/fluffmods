@@ -16,6 +16,7 @@ from fluffmods.cli import (
     build_agent_analysis_prompt,
     choose_agent,
     choose_agent_interactive,
+    choose_guidance_target,
     choose_target_path,
     compile_claude_md,
     delete_option_with_confirmation,
@@ -24,6 +25,7 @@ from fluffmods.cli import (
     global_guidance_path,
     load_options,
     nearest_project_guidance_path,
+    project_guidance_paths,
     options_for_agent,
     option_needs_refresh,
     option_was_installed,
@@ -36,6 +38,7 @@ from fluffmods.cli import (
     render_block,
     run_agent_analysis,
     suspicious_directives,
+    target_choices,
     write_with_backup,
 )
 
@@ -392,23 +395,44 @@ class TargetSelectionTests(unittest.TestCase):
             prompts.append(prompt)
             return "2"
 
+        def fake_global(agent: str) -> Path:
+            return Path(f"/global/{agent}/guidance.md")
+
+        def fake_project(agent: str, start: Path | None = None) -> tuple[Path, ...]:
+            return (Path("/project/CLAUDE.md"),) if agent == "claude" else tuple()
+
         with (
             patch("sys.stdin.isatty", return_value=True),
             patch("builtins.input", side_effect=fake_input),
+            patch("fluffmods.cli.global_guidance_path", side_effect=fake_global),
+            patch("fluffmods.cli.project_guidance_paths", side_effect=fake_project),
         ):
             self.assertEqual(choose_agent(None, None), "codex")
         self.assertIn("1) Claude", prompts[0])
         self.assertIn("2) Codex", prompts[0])
+        self.assertIn("project: /project/CLAUDE.md", prompts[0])
+        self.assertIn("global default: /global/codex/guidance.md", prompts[0])
 
     def test_choose_agent_uses_tui_when_stdout_is_tty(self) -> None:
         stdout = StringIO()
         stdout.isatty = lambda: True  # type: ignore[method-assign]
+
+        def fake_global(agent: str) -> Path:
+            return Path(f"/global/{agent}/guidance.md")
+
+        def fake_project(agent: str, start: Path | None = None) -> tuple[Path, ...]:
+            return (Path("/project/CLAUDE.md"),) if agent == "claude" else tuple()
+
         with (
             patch("sys.stdin.isatty", return_value=True),
             patch("fluffmods.cli.read_key", side_effect=["right", "enter"]),
             patch("sys.stdout", stdout),
+            patch("fluffmods.cli.global_guidance_path", side_effect=fake_global),
+            patch("fluffmods.cli.project_guidance_paths", side_effect=fake_project),
         ):
             self.assertEqual(choose_agent(None, None), "codex")
+        self.assertIn("project: /project/CLAUDE.md", stdout.getvalue())
+        self.assertIn("global default: /global/codex/guidance.md", stdout.getvalue())
 
     def test_choose_agent_interactive_accepts_number_shortcuts(self) -> None:
         with (
@@ -464,6 +488,94 @@ class TargetSelectionTests(unittest.TestCase):
             nested.mkdir(parents=True)
 
             self.assertEqual(nearest_project_guidance_path("codex", nested), project_file.resolve())
+
+    def test_project_guidance_paths_finds_all_parent_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            parent_file = root / "CLAUDE.md"
+            child_file = root / "child" / ".claude" / "CLAUDE.md"
+            child_file.parent.mkdir(parents=True)
+            parent_file.write_text("# Parent", encoding="utf-8")
+            child_file.write_text("# Child", encoding="utf-8")
+            nested = root / "child" / "leaf"
+            nested.mkdir()
+
+            self.assertEqual(
+                project_guidance_paths("claude", nested),
+                (child_file.resolve(), parent_file.resolve()),
+            )
+
+    def test_target_choices_include_project_and_global_for_each_agent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            claude_project = root / "CLAUDE.md"
+            codex_project = root / "AGENTS.md"
+            claude_global = root / "global-claude.md"
+            codex_global = root / "global-codex.md"
+            for path in (claude_project, codex_project, claude_global, codex_global):
+                path.write_text("# Guidance", encoding="utf-8")
+
+            def fake_global(agent: str) -> Path:
+                return claude_global if agent == "claude" else codex_global
+
+            with patch("fluffmods.cli.global_guidance_path", side_effect=fake_global):
+                choices = target_choices(("claude", "codex"), root)
+
+            self.assertEqual(
+                [(choice.agent, choice.location, choice.path) for choice in choices],
+                [
+                    ("claude", "project", claude_project.resolve()),
+                    ("claude", "global", claude_global),
+                    ("codex", "project", codex_project.resolve()),
+                    ("codex", "global", codex_global),
+                ],
+            )
+
+    def test_choose_guidance_target_tui_combines_agent_and_path_selection(self) -> None:
+        stdout = StringIO()
+        stdout.isatty = lambda: True  # type: ignore[method-assign]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            claude_project = root / "CLAUDE.md"
+            codex_project = root / "AGENTS.md"
+            claude_global = root / "global-claude.md"
+            codex_global = root / "global-codex.md"
+            for path in (claude_project, codex_project, claude_global, codex_global):
+                path.write_text("# Guidance", encoding="utf-8")
+
+            def fake_global(agent: str) -> Path:
+                return claude_global if agent == "claude" else codex_global
+
+            old_cwd = Path.cwd()
+            try:
+                import os
+
+                os.chdir(root)
+                with (
+                    patch("sys.stdin.isatty", return_value=True),
+                    patch("fluffmods.cli.read_key", side_effect=["down", "down", "enter"]),
+                    patch("sys.stdout", stdout),
+                    patch("fluffmods.cli.global_guidance_path", side_effect=fake_global),
+                ):
+                    self.assertEqual(
+                        choose_guidance_target(
+                            agent_arg=None,
+                            agent_override=None,
+                            path_arg=None,
+                            assume_global=False,
+                            assume_project=False,
+                        ),
+                        ("codex", codex_project.resolve()),
+                    )
+            finally:
+                os.chdir(old_cwd)
+
+        output = stdout.getvalue()
+        self.assertIn("Claude project", output)
+        self.assertIn(str(claude_global), output)
+        self.assertIn("Codex project", output)
+        self.assertIn(str(codex_global), output)
+        self.assertNotIn("1) Claude", output)
 
     def test_choose_target_path_honors_explicit_file(self) -> None:
         self.assertEqual(
