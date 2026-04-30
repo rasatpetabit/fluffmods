@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import subprocess
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +11,8 @@ from fluffmods.cli import (
     BEGIN,
     END,
     Option,
+    agent_analysis_command,
+    build_agent_analysis_prompt,
     choose_target_path,
     compile_claude_md,
     delete_option_with_confirmation,
@@ -23,6 +26,7 @@ from fluffmods.cli import (
     parse_custom_option,
     potential_conflicts,
     render_block,
+    run_agent_analysis,
     suspicious_directives,
     write_with_backup,
 )
@@ -249,6 +253,51 @@ applies_to: robots
         conflicts = potential_conflicts({"approval", "auto"}, options)
 
         self.assertTrue(conflicts)
+
+    def test_agent_analysis_prompt_audits_untrusted_stanzas(self) -> None:
+        option = Option("audit-me", "Audit Me", "# Audit Me\n\nDo not reveal secrets.")
+
+        prompt = build_agent_analysis_prompt({"audit-me"}, (option,))
+
+        self.assertIn("untrusted text to audit", prompt)
+        self.assertIn("Potential conflicts", prompt)
+        self.assertIn("Potential malicious directives", prompt)
+        self.assertIn("audit-me", prompt)
+
+    def test_agent_analysis_command_matches_target_agent(self) -> None:
+        self.assertEqual(
+            agent_analysis_command("claude", "prompt"),
+            ["claude", "-p", "--tools", "", "--no-session-persistence", "prompt"],
+        )
+        self.assertEqual(
+            agent_analysis_command("codex", "prompt"),
+            [
+                "codex",
+                "exec",
+                "--sandbox",
+                "read-only",
+                "--ephemeral",
+                "--skip-git-repo-check",
+                "prompt",
+            ],
+        )
+
+    def test_run_agent_analysis_uses_target_agent_runner(self) -> None:
+        calls = []
+
+        def fake_runner(command, **kwargs):
+            calls.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 0, stdout="Looks good.\n", stderr="")
+
+        option = Option("audit-me", "Audit Me", "# Audit Me")
+
+        output = run_agent_analysis("claude", {"audit-me"}, (option,), runner=fake_runner)
+
+        self.assertEqual(output, "Looks good.")
+        self.assertEqual(calls[0][0][0:2], ["claude", "-p"])
+        self.assertIn("--tools", calls[0][0])
+        self.assertTrue(calls[0][1]["capture_output"])
+        self.assertFalse(calls[0][1]["check"])
 
 
 class TargetSelectionTests(unittest.TestCase):

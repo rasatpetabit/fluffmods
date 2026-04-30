@@ -216,9 +216,10 @@ If no managed block exists yet, the tool appends one.
 - Does not edit `~/.claude/settings.json` or `~/.claude.json`.
 - Creates a backup before writing.
 - Supports `--preview` for dry-run inspection.
-- After applying, prints a short heuristic summary of possible conflicts between
-  selected stanzas and suspicious directives that may indicate a compromised
-  feed.
+- After applying, asks the target agent (`claude` for Claude config, `codex` for
+  Codex config) to audit the selected stanzas for conflicts and suspicious
+  directives that may indicate a compromised feed, then prints the local
+  heuristic fallback summary.
 
 ## License
 
