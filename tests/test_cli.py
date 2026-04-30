@@ -21,6 +21,7 @@ from fluffmods.cli import (
     compile_claude_md,
     delete_option_with_confirmation,
     detect_enabled,
+    display_path,
     infer_enabled_from_text,
     global_guidance_path,
     load_options,
@@ -594,6 +595,25 @@ class TargetSelectionTests(unittest.TestCase):
                 ],
             )
 
+    def test_display_path_prefers_current_directory_then_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            project = home / "dev" / "project"
+            project.mkdir(parents=True)
+
+            self.assertEqual(
+                display_path(project / "CLAUDE.md", start=project, home=home),
+                "./CLAUDE.md",
+            )
+            self.assertEqual(
+                display_path(home / ".claude" / "CLAUDE.md", start=project, home=home),
+                "~/.claude/CLAUDE.md",
+            )
+            self.assertEqual(
+                display_path(Path("/var/tmp/outside.md"), start=project, home=home),
+                "/var/tmp/outside.md",
+            )
+
     def test_choose_guidance_target_tui_combines_agent_and_path_selection(self) -> None:
         stdout = StringIO()
         stdout.isatty = lambda: True  # type: ignore[method-assign]
@@ -635,10 +655,10 @@ class TargetSelectionTests(unittest.TestCase):
 
         output = stdout.getvalue()
         lines = output.splitlines()
-        self.assertIn(f"  Claude project  {claude_project.resolve()}", lines)
-        self.assertIn(f"> Codex project   {codex_project.resolve()}", lines)
-        self.assertIn(f"  Claude global   {claude_global}", lines)
-        self.assertIn(f"  Codex global    {codex_global}", lines)
+        self.assertIn("  Claude project  ./CLAUDE.md", lines)
+        self.assertIn("> Codex project   ./AGENTS.md", lines)
+        self.assertIn("  Claude global   ./global-claude.md", lines)
+        self.assertIn("  Codex global    ./global-codex.md", lines)
         self.assertNotIn(f"    {claude_project.resolve()}", lines)
         self.assertNotIn("1) Claude", output)
 

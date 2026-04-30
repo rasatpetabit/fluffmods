@@ -250,7 +250,7 @@ def choose_agent(agent_arg: str | None, agent_override: str | None) -> str:
 
 def agent_guidance_location(agent: str) -> str:
     choice = target_choices((agent,))[0]
-    return f"{choice.location}: {choice.path}"
+    return f"{choice.location}: {display_path(choice.path)}"
 
 
 def print_agent_menu(selected_index: int) -> None:
@@ -321,6 +321,32 @@ def target_choices(agents: tuple[str, ...] = AGENTS, start: Path | None = None) 
     return tuple(choices)
 
 
+def display_path(path: Path, start: Path | None = None, home: Path | None = None) -> str:
+    try:
+        resolved = path.expanduser().resolve()
+    except OSError:
+        resolved = path.expanduser().absolute()
+
+    base = (start or Path.cwd()).resolve()
+    try:
+        relative = resolved.relative_to(base)
+    except ValueError:
+        pass
+    else:
+        if str(relative) == ".":
+            return "."
+        return f"./{relative.as_posix()}"
+
+    home_path = (home or Path.home()).expanduser().resolve()
+    try:
+        relative = resolved.relative_to(home_path)
+    except ValueError:
+        return str(path)
+    if str(relative) == ".":
+        return "~"
+    return f"~/{relative.as_posix()}"
+
+
 def print_target_menu(selected_index: int, choices: tuple[TargetChoice, ...]) -> None:
     print("\033[2J\033[H", end="")
     print("? Edit which guidance file?")
@@ -334,7 +360,7 @@ def print_target_menu(selected_index: int, choices: tuple[TargetChoice, ...]) ->
         pointer = ">" if index == selected_index else " "
         agent_label = "Claude" if choice.agent == "claude" else "Codex"
         label = f"{agent_label} {choice.location}"
-        print(f"{pointer} {label:<{label_width}}  {choice.path}")
+        print(f"{pointer} {label:<{label_width}}  {display_path(choice.path)}")
 
 
 def choose_target_interactive(choices: tuple[TargetChoice, ...]) -> TargetChoice:
@@ -369,7 +395,7 @@ def choose_target_prompt(choices: tuple[TargetChoice, ...]) -> TargetChoice:
         lines = ["Edit which guidance file?"]
         for index, choice in enumerate(choices):
             agent_label = "Claude" if choice.agent == "claude" else "Codex"
-            lines.append(f"  {index + 1}) {agent_label} {choice.location} - {choice.path}")
+            lines.append(f"  {index + 1}) {agent_label} {choice.location} - {display_path(choice.path)}")
         lines.append("  Q) Quit")
         default = "1" if choices else "Q"
         choice = input("\n".join(lines) + f"\nSelection [1-{len(choices)}/Q, Enter={default}]: ").strip().lower()
