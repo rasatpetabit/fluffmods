@@ -16,6 +16,8 @@ from fluffmods.cli import (
     choose_target_path,
     compile_claude_md,
     delete_option_with_confirmation,
+    detect_enabled,
+    infer_enabled_from_text,
     global_guidance_path,
     load_options,
     nearest_project_guidance_path,
@@ -24,6 +26,7 @@ from fluffmods.cli import (
     parse_enabled,
     parse_installed_option_metadata,
     parse_custom_option,
+    recover_enabled_from_backups,
     potential_conflicts,
     render_block,
     run_agent_analysis,
@@ -61,6 +64,35 @@ class ConfigCompileTests(unittest.TestCase):
         original = render_block({"refresh-me"}, (old_option,))
 
         self.assertTrue(option_needs_refresh(original, {"refresh-me"}, new_option))
+
+    def test_infer_enabled_from_existing_exact_stanza_body(self) -> None:
+        option = Option("already-there", "Already There", "# Already There\n\nUse this behavior.")
+        text = "# Config\n\n# Already There\n\nUse this behavior.\n"
+
+        self.assertEqual(infer_enabled_from_text(text, (option,)), {"already-there"})
+
+    def test_detect_enabled_recovers_from_latest_backup_when_live_block_empty(self) -> None:
+        option = Option("recovered", "Recovered", "# Recovered\n\nUse this behavior.")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            path.write_text(render_block(set(), (option,)), encoding="utf-8")
+            older = path.with_name("CLAUDE.md.fluffmods-20260430-000000.bak")
+            older.write_text(render_block(set(), (option,)), encoding="utf-8")
+            newer = path.with_name("CLAUDE.md.fluffmods-20260430-000001.bak")
+            newer.write_text(render_block({"recovered"}, (option,)), encoding="utf-8")
+
+            enabled = detect_enabled(path, path.read_text(encoding="utf-8"), (option,))
+
+            self.assertEqual(enabled, {"recovered"})
+
+    def test_recover_enabled_from_backups_ignores_ids_not_in_current_options(self) -> None:
+        option = Option("current", "Current", "# Current")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            backup = path.with_name("CLAUDE.md.fluffmods-20260430-000001.bak")
+            backup.write_text("<!-- BEGIN FLUFF-MODS OPTIONS -->\n<!-- fluffmods: enabled=old-id -->\n<!-- END FLUFF-MODS OPTIONS -->", encoding="utf-8")
+
+            self.assertEqual(recover_enabled_from_backups(path, (option,)), set())
 
     def test_compile_replaces_existing_managed_block(self) -> None:
         original = f"""# User Preferences
