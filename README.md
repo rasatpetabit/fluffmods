@@ -46,6 +46,9 @@ For Codex, use `--codex` or `--agent codex`. Global Codex guidance targets
 `~/.codex/AGENTS.md`, and project discovery looks for `AGENTS.md` or
 `.codex/AGENTS.md`.
 
+Options are tagged as `generic`, `claude`, or `codex`. Generic options are shown
+for both agents; Claude and Codex options are shown only for that selected agent.
+
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
 toggle an option, `p` to preview, and enter or `a` to apply.
 
@@ -56,7 +59,7 @@ fluffmods --status
 fluffmods --codex --status
 ```
 
-Preview the generated Claude guidance block:
+Preview the generated guidance block:
 
 ```sh
 fluffmods --preview
@@ -93,17 +96,17 @@ fluffmods --options-dir ./my-claude-options --status
 
 ## Included Options
 
-- `codex-delegation`: Automatically dispatch simple and well-defined coding tasks to Codex.
-- `verify-before-complete`: Require local verification before claiming implementation work is done.
-- `protect-user-work`: Treat existing uncommitted changes as user-owned.
-- `review-findings-first`: Use findings-first format for code reviews.
-- `plan-complex-work`: Plan before multi-file or ambiguous implementation work.
-- `prefer-project-runbooks`: Prefer project-local runbooks and scripts over generic commands.
-- `concise-final-report`: Keep final reports compact and evidence-backed.
-- `durable-handoff`: Write durable handoff notes for substantive multi-step work.
-- `ask-for-risky-actions`: Ask before destructive, external, or production-visible actions.
-- `exact-scope`: Honor exact file and task scope literally.
-- `output-important-command-results`: Relay important command output instead of just saying commands ran.
+- `codex-delegation` (`codex`): Automatically dispatch simple and well-defined coding tasks to Codex.
+- `verify-before-complete` (`generic`): Require local verification before claiming implementation work is done.
+- `protect-user-work` (`generic`): Treat existing uncommitted changes as user-owned.
+- `review-findings-first` (`generic`): Use findings-first format for code reviews.
+- `plan-complex-work` (`generic`): Plan before multi-file or ambiguous implementation work.
+- `prefer-project-runbooks` (`generic`): Prefer project-local runbooks and scripts over generic commands.
+- `concise-final-report` (`generic`): Keep final reports compact and evidence-backed.
+- `durable-handoff` (`generic`): Write durable handoff notes for substantive multi-step work.
+- `ask-for-risky-actions` (`generic`): Ask before destructive, external, or production-visible actions.
+- `exact-scope` (`generic`): Honor exact file and task scope literally.
+- `output-important-command-results` (`generic`): Relay important command output instead of just saying commands ran.
 
 ## Custom Options
 
@@ -136,6 +139,7 @@ For stable ids and labels, add front matter:
 ---
 id: small-prs
 label: Prefer small pull requests
+applies_to: generic
 ---
 
 # Prefer Small Pull Requests
@@ -143,6 +147,9 @@ label: Prefer small pull requests
 When implementation work grows beyond one clear review unit, split it into
 smaller commits or handoff tasks before continuing.
 ```
+
+`applies_to` may be `generic`, `claude`, or `codex`. If omitted, it defaults to
+`generic`.
 
 The intended model is:
 

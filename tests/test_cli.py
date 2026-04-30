@@ -12,6 +12,7 @@ from fluffmods.cli import (
     global_guidance_path,
     load_options,
     nearest_project_guidance_path,
+    options_for_agent,
     parse_enabled,
     parse_custom_option,
     render_block,
@@ -57,6 +58,15 @@ class ConfigCompileTests(unittest.TestCase):
             compiled.index("**Use plugins and MCPs when they're available.**"),
         )
 
+    def test_codex_delegation_is_codex_only(self) -> None:
+        all_options = load_options([], include_default_dirs=False)
+
+        claude_ids = {option.option_id for option in options_for_agent(all_options, "claude")}
+        codex_ids = {option.option_id for option in options_for_agent(all_options, "codex")}
+
+        self.assertNotIn("codex-delegation", claude_ids)
+        self.assertIn("codex-delegation", codex_ids)
+
 
 class WriteTests(unittest.TestCase):
     def test_write_with_backup_creates_backup_for_existing_file(self) -> None:
@@ -80,6 +90,7 @@ class CustomOptionTests(unittest.TestCase):
                 """---
 id: my-custom-option
 label: My Custom Option
+applies_to: claude
 ---
 ## My Custom Stanza
 
@@ -92,6 +103,7 @@ Use this behavior.
 
             self.assertEqual(option.option_id, "my-custom-option")
             self.assertEqual(option.label, "My Custom Option")
+            self.assertEqual(option.applies_to, "claude")
             self.assertIn("Use this behavior.", option.body)
             self.assertEqual(option.source, str(path))
 
@@ -109,6 +121,36 @@ Do the extra thing.
             options = load_options([tmp], include_default_dirs=False)
 
             self.assertIn("extra", {option.option_id for option in options})
+
+    def test_custom_option_defaults_to_generic(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "generic-extra.md"
+            path.write_text(
+                """# Generic Extra
+
+Do the generic thing.
+""",
+                encoding="utf-8",
+            )
+
+            option = parse_custom_option(path)
+
+            self.assertEqual(option.applies_to, "generic")
+
+    def test_custom_option_rejects_invalid_applies_to(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "bad.md"
+            path.write_text(
+                """---
+applies_to: robots
+---
+# Bad Option
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(ValueError):
+                parse_custom_option(path)
 
 
 class TargetSelectionTests(unittest.TestCase):

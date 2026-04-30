@@ -15,6 +15,7 @@ BEGIN = "<!-- BEGIN FLUFF-MODS OPTIONS -->"
 END = "<!-- END FLUFF-MODS OPTIONS -->"
 META_PREFIX = "<!-- fluffmods: enabled="
 AGENTS = ("claude", "codex")
+APPLIES_TO = ("generic", "claude", "codex")
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class Option:
     option_id: str
     label: str
     body: str
+    applies_to: str = "generic"
     source: str = "bundled"
 
 
@@ -69,6 +71,7 @@ Acceptance criteria:
 Verification:
 Return:
 ```""",
+        applies_to="codex",
     ),
     Option(
         "verify-before-complete",
@@ -151,6 +154,14 @@ When command output is important to the user's request, relay the relevant lines
 
 def option_map(options: tuple[Option, ...]) -> dict[str, Option]:
     return {option.option_id: option for option in options}
+
+
+def option_applies_to_agent(option: Option, agent: str) -> bool:
+    return option.applies_to == "generic" or option.applies_to == agent
+
+
+def options_for_agent(options: tuple[Option, ...], agent: str) -> tuple[Option, ...]:
+    return tuple(option for option in options if option_applies_to_agent(option, agent))
 
 
 def global_guidance_path(agent: str) -> Path:
@@ -269,11 +280,22 @@ def parse_custom_option(path: Path) -> Option:
     fallback_label = path.stem.replace("-", " ").replace("_", " ").title()
     option_id = slugify_option_id(metadata.get("id", path.stem))
     label = metadata.get("label") or label_from_body(body, fallback_label)
+    applies_to = metadata.get("applies_to", "generic").strip().lower()
+    if applies_to not in APPLIES_TO:
+        raise ValueError(
+            f"{path} has invalid applies_to {applies_to!r}; expected one of {', '.join(APPLIES_TO)}"
+        )
 
     if not body:
         raise ValueError(f"{path} has no stanza body")
 
-    return Option(option_id=option_id, label=label, body=body, source=str(path))
+    return Option(
+        option_id=option_id,
+        label=label,
+        body=body,
+        applies_to=applies_to,
+        source=str(path),
+    )
 
 
 def default_option_dirs() -> list[Path]:
@@ -389,7 +411,10 @@ def print_status(enabled: set[str], options: tuple[Option, ...] = BUILTIN_OPTION
     for index, option in enumerate(options, start=1):
         mark = "x" if option.option_id in enabled else " "
         source = "bundled" if option.source == "bundled" else "custom"
-        print(f"{index:2}. [{mark}] {option.label}  ({option.option_id}, {source})")
+        print(
+            f"{index:2}. [{mark}] {option.label}  "
+            f"({option.option_id}, {option.applies_to}, {source})"
+        )
 
 
 def print_menu(
@@ -407,7 +432,10 @@ def print_menu(
         pointer = ">" if index == selected_index else " "
         mark = "x" if option.option_id in enabled else " "
         source = "bundled" if option.source == "bundled" else "custom"
-        print(f"{pointer} {index + 1:2}. [{mark}] {option.label}  ({option.option_id}, {source})")
+        print(
+            f"{pointer} {index + 1:2}. [{mark}] {option.label}  "
+            f"({option.option_id}, {option.applies_to}, {source})"
+        )
 
 
 def read_key() -> str:
@@ -570,7 +598,8 @@ def main(argv: list[str] | None = None) -> int:
 
     original = read_text(path)
     enabled = parse_enabled(original)
-    options = load_options(args.options_dir, not args.no_default_option_dirs)
+    all_options = load_options(args.options_dir, not args.no_default_option_dirs)
+    options = options_for_agent(all_options, agent)
 
     enabled.update(normalize_ids(args.enable, options))
     enabled.difference_update(normalize_ids(args.disable, options))
