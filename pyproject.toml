@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "Fluff-Mods"
 version = "0.1.0"
-description = "Claude + Fluff-Mods: a checkbox-style manager for toggleable Claude Code guidance."
+description = "Claude + Fluff-Mods: a checkbox-style manager for toggleable Claude Code and Codex guidance."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

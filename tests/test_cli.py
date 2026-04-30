@@ -9,8 +9,9 @@ from fluffmods.cli import (
     END,
     choose_target_path,
     compile_claude_md,
+    global_guidance_path,
     load_options,
-    nearest_project_claude_path,
+    nearest_project_guidance_path,
     parse_enabled,
     parse_custom_option,
     render_block,
@@ -111,7 +112,7 @@ Do the extra thing.
 
 
 class TargetSelectionTests(unittest.TestCase):
-    def test_nearest_project_claude_path_finds_parent_file(self) -> None:
+    def test_nearest_project_guidance_path_finds_claude_parent_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             project_file = root / "CLAUDE.md"
@@ -119,9 +120,9 @@ class TargetSelectionTests(unittest.TestCase):
             nested = root / "a" / "b"
             nested.mkdir(parents=True)
 
-            self.assertEqual(nearest_project_claude_path(nested), project_file.resolve())
+            self.assertEqual(nearest_project_guidance_path("claude", nested), project_file.resolve())
 
-    def test_nearest_project_claude_path_finds_dot_claude_file(self) -> None:
+    def test_nearest_project_guidance_path_finds_dot_claude_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             project_file = root / ".claude" / "CLAUDE.md"
@@ -130,12 +131,69 @@ class TargetSelectionTests(unittest.TestCase):
             nested = root / "child"
             nested.mkdir()
 
-            self.assertEqual(nearest_project_claude_path(nested), project_file.resolve())
+            self.assertEqual(nearest_project_guidance_path("claude", nested), project_file.resolve())
+
+    def test_nearest_project_guidance_path_finds_codex_agents_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project_file = root / "AGENTS.md"
+            project_file.write_text("# Project", encoding="utf-8")
+            nested = root / "a" / "b"
+            nested.mkdir(parents=True)
+
+            self.assertEqual(nearest_project_guidance_path("codex", nested), project_file.resolve())
 
     def test_choose_target_path_honors_explicit_file(self) -> None:
         self.assertEqual(
-            choose_target_path("/tmp/custom-claude.md", assume_global=False, assume_project=False),
-            Path("/tmp/custom-claude.md"),
+            choose_target_path(
+                "/tmp/custom-guidance.md",
+                assume_global=False,
+                assume_project=False,
+                agent="claude",
+            ),
+            Path("/tmp/custom-guidance.md"),
+        )
+
+    def test_global_guidance_path_supports_codex(self) -> None:
+        self.assertEqual(
+            global_guidance_path("codex"),
+            Path.home() / ".codex" / "AGENTS.md",
+        )
+
+    def test_choose_target_path_uses_codex_project(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project_file = root / "AGENTS.md"
+            project_file.write_text("# Project", encoding="utf-8")
+            nested = root / "subdir"
+            nested.mkdir()
+
+            old_cwd = Path.cwd()
+            try:
+                import os
+
+                os.chdir(nested)
+                self.assertEqual(
+                    choose_target_path(
+                        None,
+                        assume_global=False,
+                        assume_project=True,
+                        agent="codex",
+                    ),
+                    project_file.resolve(),
+                )
+            finally:
+                os.chdir(old_cwd)
+
+    def test_choose_target_path_uses_codex_global(self) -> None:
+        self.assertEqual(
+            choose_target_path(
+                None,
+                assume_global=True,
+                assume_project=False,
+                agent="codex",
+            ),
+            Path.home() / ".codex" / "AGENTS.md",
         )
 
 

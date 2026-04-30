@@ -1,12 +1,12 @@
 # Fluff-Mods
 
 `Claude + Fluff-Mods` is a small checkbox-style CLI for turning long Claude Code
-behavior directives into simple on/off options. It ships with a small catalog of
-pre-packaged stanzas and can load your own Markdown stanzas from local option
-directories.
+and Codex behavior directives into simple on/off options. It ships with a small
+catalog of pre-packaged stanzas and can load your own Markdown stanzas from local
+option directories.
 
-It edits one managed block in `~/.claude/CLAUDE.md` and leaves the rest of the
-file alone.
+It edits one managed block in the selected guidance file and leaves the rest of
+the file alone. Claude targets use `CLAUDE.md`; Codex targets use `AGENTS.md`.
 
 ## Install
 
@@ -42,6 +42,10 @@ If you run `fluffmods` inside a project that already has `CLAUDE.md` or
 `.claude/CLAUDE.md`, it asks whether you want to edit that project guidance or
 your global `~/.claude/CLAUDE.md`.
 
+For Codex, use `--codex` or `--agent codex`. Global Codex guidance targets
+`~/.codex/AGENTS.md`, and project discovery looks for `AGENTS.md` or
+`.codex/AGENTS.md`.
+
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
 toggle an option, `p` to preview, and enter or `a` to apply.
 
@@ -49,6 +53,7 @@ Check current option state:
 
 ```sh
 fluffmods --status
+fluffmods --codex --status
 ```
 
 Preview the generated Claude guidance block:
@@ -62,6 +67,7 @@ Enable or disable options non-interactively:
 ```sh
 fluffmods --enable codex-delegation --apply
 fluffmods --disable codex-delegation --apply
+fluffmods --codex --enable exact-scope --apply
 ```
 
 Use a different target file:
@@ -75,6 +81,8 @@ Skip the target prompt:
 ```sh
 fluffmods --project
 fluffmods --global
+fluffmods --codex --project
+fluffmods --codex --global
 ```
 
 Load custom stanza files from a directory:
@@ -146,7 +154,7 @@ The intended model is:
 
 ## How It Works
 
-`fluffmods` owns this block:
+`fluffmods` owns this block in whichever guidance file you choose:
 
 ```md
 <!-- BEGIN FLUFF-MODS OPTIONS -->

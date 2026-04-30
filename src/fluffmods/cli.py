@@ -14,6 +14,7 @@ from pathlib import Path
 BEGIN = "<!-- BEGIN FLUFF-MODS OPTIONS -->"
 END = "<!-- END FLUFF-MODS OPTIONS -->"
 META_PREFIX = "<!-- fluffmods: enabled="
+AGENTS = ("claude", "codex")
 
 
 @dataclass(frozen=True)
@@ -152,14 +153,16 @@ def option_map(options: tuple[Option, ...]) -> dict[str, Option]:
     return {option.option_id: option for option in options}
 
 
-def global_claude_path() -> Path:
+def global_guidance_path(agent: str) -> Path:
+    if agent == "codex":
+        return Path.home() / ".codex" / "AGENTS.md"
     return Path.home() / ".claude" / "CLAUDE.md"
 
 
-def claude_path(path_arg: str | None) -> Path:
+def guidance_path(path_arg: str | None, agent: str) -> Path:
     if path_arg:
         return Path(path_arg).expanduser()
-    return global_claude_path()
+    return global_guidance_path(agent)
 
 
 def read_text(path: Path) -> str:
@@ -168,29 +171,42 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def nearest_project_claude_path(start: Path | None = None) -> Path | None:
+def project_guidance_candidates(directory: Path, agent: str) -> tuple[Path, ...]:
+    if agent == "codex":
+        return (
+            directory / "AGENTS.md",
+            directory / ".codex" / "AGENTS.md",
+        )
+    return (
+        directory / "CLAUDE.md",
+        directory / ".claude" / "CLAUDE.md",
+    )
+
+
+def nearest_project_guidance_path(agent: str, start: Path | None = None) -> Path | None:
     current = (start or Path.cwd()).resolve()
     if current.is_file():
         current = current.parent
 
     for directory in (current, *current.parents):
-        candidate = directory / "CLAUDE.md"
-        if candidate.exists():
-            return candidate
-
-        dot_claude_candidate = directory / ".claude" / "CLAUDE.md"
-        if dot_claude_candidate.exists():
-            return dot_claude_candidate
+        for candidate in project_guidance_candidates(directory, agent):
+            if candidate.exists():
+                return candidate
 
     return None
 
 
-def choose_target_path(path_arg: str | None, assume_global: bool, assume_project: bool) -> Path:
+def choose_target_path(
+    path_arg: str | None,
+    assume_global: bool,
+    assume_project: bool,
+    agent: str,
+) -> Path:
     if path_arg:
-        return claude_path(path_arg)
+        return guidance_path(path_arg, agent)
 
-    global_path = global_claude_path()
-    project_path = nearest_project_claude_path()
+    global_path = global_guidance_path(agent)
+    project_path = nearest_project_guidance_path(agent)
 
     if assume_global:
         return global_path
@@ -202,14 +218,14 @@ def choose_target_path(path_arg: str | None, assume_global: bool, assume_project
 
     if not sys.stdin.isatty():
         print(
-            f"Project Claude guidance detected at {project_path}; using global {global_path}. "
+            f"Project {agent} guidance detected at {project_path}; using global {global_path}. "
             "Pass --project or --file to edit the project file.",
             file=sys.stderr,
         )
         return global_path
 
-    print(f"Project Claude guidance detected: {project_path}")
-    print(f"Global Claude guidance:           {global_path}")
+    print(f"Project {agent} guidance detected: {project_path}")
+    print(f"Global {agent} guidance:           {global_path}")
     while True:
         choice = input("Edit project or global guidance? [p/g/q] ").strip().lower()
         if choice in {"p", "project"}:
@@ -507,11 +523,19 @@ def interactive(path: Path, enabled: set[str], options: tuple[Option, ...]) -> s
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Claude + Fluff-Mods: checkbox-style manager for Claude Code guidance."
+        description="Claude + Fluff-Mods: checkbox-style manager for Claude Code and Codex guidance."
     )
-    parser.add_argument("--file", help="Path to CLAUDE.md, defaults to ~/.claude/CLAUDE.md")
-    parser.add_argument("--global", dest="assume_global", action="store_true", help="Edit ~/.claude/CLAUDE.md without prompting")
-    parser.add_argument("--project", dest="assume_project", action="store_true", help="Edit the nearest project CLAUDE.md without prompting")
+    parser.add_argument(
+        "--agent",
+        choices=AGENTS,
+        default="claude",
+        help="Guidance target family, defaults to claude",
+    )
+    parser.add_argument("--claude", dest="agent_override", action="store_const", const="claude", help="Shortcut for --agent claude")
+    parser.add_argument("--codex", dest="agent_override", action="store_const", const="codex", help="Shortcut for --agent codex")
+    parser.add_argument("--file", help="Path to guidance file; bypasses agent default target discovery")
+    parser.add_argument("--global", dest="assume_global", action="store_true", help="Edit the selected agent's global guidance file without prompting")
+    parser.add_argument("--project", dest="assume_project", action="store_true", help="Edit the selected agent's nearest project guidance file without prompting")
     parser.add_argument("--status", action="store_true", help="Print current option status")
     parser.add_argument("--preview", action="store_true", help="Print generated managed block")
     parser.add_argument("--apply", action="store_true", help="Apply selected options")
@@ -536,9 +560,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.assume_global and args.assume_project:
         parser.error("--global and --project are mutually exclusive")
+    agent = args.agent_override or args.agent
 
     try:
-        path = choose_target_path(args.file, args.assume_global, args.assume_project)
+        path = choose_target_path(args.file, args.assume_global, args.assume_project, agent)
     except KeyboardInterrupt:
         print("No changes applied.")
         return 0
