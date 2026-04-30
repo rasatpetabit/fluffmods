@@ -13,6 +13,7 @@ from fluffmods.cli import (
     Option,
     agent_analysis_command,
     build_agent_analysis_prompt,
+    choose_agent,
     choose_target_path,
     compile_claude_md,
     delete_option_with_confirmation,
@@ -359,6 +360,30 @@ applies_to: robots
 
 
 class TargetSelectionTests(unittest.TestCase):
+    def test_choose_agent_prompts_when_unspecified(self) -> None:
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value="codex"),
+        ):
+            self.assertEqual(choose_agent(None, None), "codex")
+
+    def test_choose_agent_enter_defaults_to_claude(self) -> None:
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("builtins.input", return_value=""),
+        ):
+            self.assertEqual(choose_agent(None, None), "claude")
+
+    def test_choose_agent_respects_explicit_override_without_prompting(self) -> None:
+        with patch("builtins.input") as input_mock:
+            self.assertEqual(choose_agent("codex", None), "codex")
+            self.assertEqual(choose_agent(None, "claude"), "claude")
+        input_mock.assert_not_called()
+
+    def test_choose_agent_non_tty_defaults_to_claude(self) -> None:
+        with patch("sys.stdin.isatty", return_value=False), patch("sys.stderr", new_callable=StringIO):
+            self.assertEqual(choose_agent(None, None), "claude")
+
     def test_nearest_project_guidance_path_finds_claude_parent_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

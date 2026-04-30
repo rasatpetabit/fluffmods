@@ -207,6 +207,29 @@ def options_for_agent(options: tuple[Option, ...], agent: str) -> tuple[Option, 
     )
 
 
+def choose_agent(agent_arg: str | None, agent_override: str | None) -> str:
+    if agent_override:
+        return agent_override
+    if agent_arg:
+        return agent_arg
+    if not sys.stdin.isatty():
+        print(
+            "Agent not specified; defaulting to Claude. Pass --claude, --codex, or --agent to choose explicitly.",
+            file=sys.stderr,
+        )
+        return "claude"
+
+    while True:
+        choice = input("Edit Claude or Codex guidance? [Claude/Codex/Q, Enter=Claude] ").strip().lower()
+        if choice in {"", "claude", "cl", "l", "1"}:
+            return "claude"
+        if choice in {"codex", "co", "x", "2"}:
+            return "codex"
+        if choice in {"q", "quit", "exit"}:
+            raise KeyboardInterrupt
+        print("Enter Claude, Codex, or Q to quit.")
+
+
 def global_guidance_path(agent: str) -> Path:
     if agent == "codex":
         return Path.home() / ".codex" / "AGENTS.md"
@@ -1369,8 +1392,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--agent",
         choices=AGENTS,
-        default="claude",
-        help="Guidance target family, defaults to claude",
+        default=None,
+        help="Guidance target family; prompts interactively when omitted",
     )
     parser.add_argument("--claude", dest="agent_override", action="store_const", const="claude", help="Shortcut for --agent claude")
     parser.add_argument("--codex", dest="agent_override", action="store_const", const="codex", help="Shortcut for --agent codex")
@@ -1414,7 +1437,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.assume_global and args.assume_project:
         parser.error("--global and --project are mutually exclusive")
-    agent = args.agent_override or args.agent
 
     if args.auto_update_configs:
         if args.auto_update_configs == "status":
@@ -1450,6 +1472,12 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         if not result.messages:
             print("No enabled remote feeds to refresh.")
+        return 0
+
+    try:
+        agent = choose_agent(args.agent, args.agent_override)
+    except KeyboardInterrupt:
+        print("No changes applied.")
         return 0
 
     try:
