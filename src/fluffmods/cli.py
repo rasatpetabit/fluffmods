@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import queue
 import re
@@ -219,15 +220,67 @@ def choose_agent(agent_arg: str | None, agent_override: str | None) -> str:
         )
         return "claude"
 
+    if sys.stdout.isatty():
+        return choose_agent_interactive()
+
     while True:
-        choice = input("Edit Claude or Codex guidance? [Claude/Codex/Q, Enter=Claude] ").strip().lower()
+        choice = input(
+            "Edit which agent guidance?\n"
+            "  1) Claude\n"
+            "  2) Codex\n"
+            "  Q) Quit\n"
+            "Selection [1/2/Q, Enter=1]: "
+        ).strip().lower()
         if choice in {"", "claude", "cl", "l", "1"}:
             return "claude"
         if choice in {"codex", "co", "x", "2"}:
             return "codex"
         if choice in {"q", "quit", "exit"}:
             raise KeyboardInterrupt
-        print("Enter Claude, Codex, or Q to quit.")
+        print("Enter 1 for Claude, 2 for Codex, or Q to quit.")
+
+
+def print_agent_menu(selected_index: int) -> None:
+    choices = (("claude", "Claude"), ("codex", "Codex"))
+    print("\033[2J\033[H", end="")
+    print("? Edit which agent guidance?")
+    print("Use ↑/↓ or ←/→ to move, Enter/Space to select, Q to quit.")
+    print()
+    for index, (_, label) in enumerate(choices):
+        pointer = ">" if index == selected_index else " "
+        print(f"{pointer} {index + 1}) {label}")
+
+
+def choose_agent_interactive() -> str:
+    choices = ("claude", "codex")
+    selected_index = 0
+    while True:
+        print_agent_menu(selected_index)
+        key = read_key()
+        if key in {"q", "escape"}:
+            print("\033[2J\033[H", end="")
+            raise KeyboardInterrupt
+        if key in {"enter", "space"}:
+            print("\033[2J\033[H", end="")
+            return choices[selected_index]
+        if key in {"up", "left", "k", "h"}:
+            selected_index = (selected_index - 1) % len(choices)
+            continue
+        if key in {"down", "right", "j", "l", "tab"}:
+            selected_index = (selected_index + 1) % len(choices)
+            continue
+        if key == "1":
+            print("\033[2J\033[H", end="")
+            return "claude"
+        if key == "2":
+            print("\033[2J\033[H", end="")
+            return "codex"
+        if key in {"c"}:
+            print("\033[2J\033[H", end="")
+            return "claude"
+        if key in {"x"}:
+            print("\033[2J\033[H", end="")
+            return "codex"
 
 
 def global_guidance_path(agent: str) -> Path:
@@ -259,6 +312,20 @@ def config_dir() -> Path:
 
 def cache_dir() -> Path:
     return Path.home() / ".cache" / "fluffmods"
+
+
+def backup_dir_for(path: Path) -> Path:
+    resolved = str(path.expanduser().resolve())
+    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]
+    safe_name = slugify_option_id(path.name)
+    return cache_dir() / "backups" / f"{safe_name}-{digest}"
+
+
+def backup_paths_for(path: Path) -> list[Path]:
+    pattern = f"{path.name}.fluffmods-*.bak"
+    paths = list(backup_dir_for(path).glob(pattern))
+    paths.extend(path.parent.glob(pattern))
+    return sorted(paths, key=lambda item: item.name, reverse=True)
 
 
 def bundled_feed_dir(feed_id: str) -> Path | None:
@@ -710,8 +777,7 @@ def managed_block_is_empty(text: str) -> bool:
 
 def recover_enabled_from_backups(path: Path, options: tuple[Option, ...]) -> set[str]:
     valid = {option.option_id for option in options}
-    pattern = f"{path.name}.fluffmods-*.bak"
-    for backup in sorted(path.parent.glob(pattern), reverse=True):
+    for backup in backup_paths_for(path):
         text = read_text(backup)
         enabled = parse_enabled(text) | infer_enabled_from_text(text, options)
         enabled = {option_id for option_id in enabled if option_id in valid}
@@ -838,7 +904,8 @@ def write_with_backup(path: Path, content: str) -> Path | None:
     backup: Path | None = None
     if path.exists():
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-        backup = path.with_name(f"{path.name}.fluffmods-{stamp}.bak")
+        backup = backup_dir_for(path) / f"{path.name}.fluffmods-{stamp}.bak"
+        backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(path, backup)
     path.write_text(content, encoding="utf-8")
     return backup
@@ -951,15 +1018,21 @@ def read_key() -> str:
                 if not next_char:
                     break
                 sequence += next_char
-                if sequence in {"[A", "[B", "OA", "OB"}:
+                if sequence in {"[A", "[B", "[C", "[D", "OA", "OB", "OC", "OD"}:
                     break
             if sequence in {"[A", "OA"}:
                 return "up"
             if sequence in {"[B", "OB"}:
                 return "down"
+            if sequence in {"[C", "OC"}:
+                return "right"
+            if sequence in {"[D", "OD"}:
+                return "left"
             return "escape"
         if char in {"\r", "\n"}:
             return "enter"
+        if char == "\t":
+            return "tab"
         if char == " ":
             return "space"
         return char.lower()

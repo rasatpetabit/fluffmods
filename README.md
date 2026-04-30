@@ -207,7 +207,7 @@ The intended model is:
 
 The tool stores enabled option ids in a metadata comment inside that block. On
 apply, it regenerates only the managed block and makes a timestamped backup of
-the target `CLAUDE.md`.
+the target guidance file under `~/.cache/fluffmods/backups/`.
 
 If no managed block exists yet, the tool appends one.
 
@@ -215,7 +215,8 @@ If no managed block exists yet, the tool appends one.
 
 - No runtime dependencies.
 - Does not edit `~/.claude/settings.json` or `~/.claude.json`.
-- Creates a backup before writing.
+- Creates a cache-directory backup before writing, so edited folders are not
+  cluttered with `.bak` files.
 - Supports `--preview` for dry-run inspection.
 - After applying, asks the target agent (`claude` for Claude config, `codex` for
   Codex config) to audit the selected stanzas for conflicts and suspicious

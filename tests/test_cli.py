@@ -12,8 +12,10 @@ from fluffmods.cli import (
     END,
     Option,
     agent_analysis_command,
+    backup_dir_for,
     build_agent_analysis_prompt,
     choose_agent,
+    choose_agent_interactive,
     choose_target_path,
     compile_claude_md,
     delete_option_with_confirmation,
@@ -94,6 +96,22 @@ class ConfigCompileTests(unittest.TestCase):
 
             self.assertEqual(enabled, {"recovered"})
 
+    def test_detect_enabled_recovers_from_cache_backup_when_live_block_empty(self) -> None:
+        option = Option("recovered", "Recovered", "# Recovered\n\nUse this behavior.")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            cache = Path(tmp) / "cache"
+            with patch("fluffmods.cli.cache_dir", return_value=cache):
+                path.write_text(render_block(set(), (option,)), encoding="utf-8")
+                backup_dir = backup_dir_for(path)
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                backup = backup_dir / "CLAUDE.md.fluffmods-20260430-000001.bak"
+                backup.write_text(render_block({"recovered"}, (option,)), encoding="utf-8")
+
+                enabled = detect_enabled(path, path.read_text(encoding="utf-8"), (option,))
+
+            self.assertEqual(enabled, {"recovered"})
+
     def test_recover_enabled_from_backups_ignores_ids_not_in_current_options(self) -> None:
         option = Option("current", "Current", "# Current")
         with tempfile.TemporaryDirectory() as tmp:
@@ -161,12 +179,16 @@ class WriteTests(unittest.TestCase):
     def test_write_with_backup_creates_backup_for_existing_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "CLAUDE.md"
+            cache = Path(tmp) / "cache"
             path.write_text("old", encoding="utf-8")
 
-            backup = write_with_backup(path, "new")
+            with patch("fluffmods.cli.cache_dir", return_value=cache):
+                backup = write_with_backup(path, "new")
 
             self.assertIsNotNone(backup)
             assert backup is not None
+            self.assertNotEqual(backup.parent, path.parent)
+            self.assertTrue(str(backup).startswith(str(cache / "backups")))
             self.assertEqual(path.read_text(encoding="utf-8"), "new")
             self.assertEqual(backup.read_text(encoding="utf-8"), "old")
 
@@ -364,11 +386,36 @@ applies_to: robots
 
 class TargetSelectionTests(unittest.TestCase):
     def test_choose_agent_prompts_when_unspecified(self) -> None:
+        prompts = []
+
+        def fake_input(prompt: str) -> str:
+            prompts.append(prompt)
+            return "2"
+
         with (
             patch("sys.stdin.isatty", return_value=True),
-            patch("builtins.input", return_value="codex"),
+            patch("builtins.input", side_effect=fake_input),
         ):
             self.assertEqual(choose_agent(None, None), "codex")
+        self.assertIn("1) Claude", prompts[0])
+        self.assertIn("2) Codex", prompts[0])
+
+    def test_choose_agent_uses_tui_when_stdout_is_tty(self) -> None:
+        stdout = StringIO()
+        stdout.isatty = lambda: True  # type: ignore[method-assign]
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("fluffmods.cli.read_key", side_effect=["right", "enter"]),
+            patch("sys.stdout", stdout),
+        ):
+            self.assertEqual(choose_agent(None, None), "codex")
+
+    def test_choose_agent_interactive_accepts_number_shortcuts(self) -> None:
+        with (
+            patch("fluffmods.cli.read_key", return_value="2"),
+            patch("sys.stdout", new_callable=StringIO),
+        ):
+            self.assertEqual(choose_agent_interactive(), "codex")
 
     def test_choose_agent_enter_defaults_to_claude(self) -> None:
         with (
