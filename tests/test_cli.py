@@ -42,6 +42,7 @@ from fluffmods.cli import (
     run_agent_analysis,
     suspicious_directives,
     target_choices,
+    wait_for_menu_return,
     write_with_backup,
 )
 
@@ -319,6 +320,22 @@ applies_to: robots
         self.assertIn("Applies to: claude", text)
         self.assertIn("Line one.\nLine two.", text)
 
+    def test_wait_for_menu_return_prints_blank_line_before_prompt(self) -> None:
+        prompts = []
+
+        def fake_input(prompt: str) -> str:
+            prompts.append(prompt)
+            return ""
+
+        with (
+            patch("sys.stdout", new_callable=StringIO) as output,
+            patch("builtins.input", side_effect=fake_input),
+        ):
+            wait_for_menu_return()
+
+        self.assertEqual(output.getvalue(), "\n")
+        self.assertEqual(prompts, ["Press enter to return to the menu..."])
+
     def test_suspicious_directive_scan_flags_compromised_feed_language(self) -> None:
         option = Option(
             "bad-feed",
@@ -352,7 +369,7 @@ applies_to: robots
         text = output.getvalue()
         self.assertIn("[x] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
         self.assertNotIn("generic", text)
-        self.assertIn("[ ] codex-only - Codex-only behavior  (codex, feed:RAS list)", text)
+        self.assertIn("[ ] codex-only - Codex-only behavior  (codex-only, feed:RAS list)", text)
 
     def test_menu_prints_short_name_first_and_omits_generic_tag(self) -> None:
         options = (
@@ -365,7 +382,7 @@ applies_to: robots
 
         text = output.getvalue()
         self.assertIn("  1. [ ] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
-        self.assertIn(">  2. [ ] claude-only - Claude-only behavior  (claude, feed:RAS list)", text)
+        self.assertIn(">  2. [ ] claude-only - Claude-only behavior  (claude-only, feed:RAS list)", text)
         self.assertNotIn("generic", text)
 
     def test_agent_analysis_prompt_audits_untrusted_stanzas(self) -> None:

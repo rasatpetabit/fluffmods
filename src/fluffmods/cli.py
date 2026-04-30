@@ -1105,7 +1105,7 @@ def source_label(option: Option) -> str:
 def option_detail_label(option: Option, refresh: str = "") -> str:
     details = []
     if option.applies_to != "generic":
-        details.append(option.applies_to)
+        details.append(f"{option.applies_to}-only")
     details.append(source_label(option) + refresh)
     return f"({', '.join(details)})"
 
@@ -1505,6 +1505,11 @@ def print_option_details(option: Option) -> None:
     print(option.body.rstrip())
 
 
+def wait_for_menu_return() -> None:
+    print()
+    input("Press enter to return to the menu...")
+
+
 def interactive(
     path: Path,
     original: str,
@@ -1560,7 +1565,7 @@ def interactive(
                 if not options:
                     continue
                 print_option_details(options[selected_index])
-                input("Press enter to return to the menu...")
+                wait_for_menu_return()
                 continue
             if key in {"r", "R"}:
                 if not options:
@@ -1736,6 +1741,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    def finish(code: int = 0) -> int:
+        print()
+        return code
+
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.assume_global and args.assume_project:
@@ -1748,34 +1757,34 @@ def main(argv: list[str] | None = None) -> int:
             enabled = args.auto_update_configs == "on"
             save_settings(ConfigSettings(auto_update_configs=enabled))
             print(f"auto_update_configs: {'on' if enabled else 'off'}")
-        return 0
+        return finish()
 
     if args.feed_list:
         print_feed_subscriptions()
-        return 0
+        return finish()
     if args.feed_add:
         try:
             feed = add_feed_subscription(args.feed_add, feed_id=args.feed_id, name=args.feed_name)
         except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
             print(f"Could not add feed: {exc}", file=sys.stderr)
-            return 1
+            return finish(1)
         print(f"Added feed {feed.feed_id}: {feed.name}")
-        return 0
+        return finish()
     if args.feed_remove:
         if remove_feed_subscription(args.feed_remove):
             print(f"Removed feed {args.feed_remove}")
-            return 0
+            return finish()
         print(f"Feed not found: {args.feed_remove}", file=sys.stderr)
-        return 1
+        return finish(1)
     if args.feed_refresh:
         result = refresh_due_feeds(force=True)
         for message in result.messages:
             print(message)
         if result.failed:
-            return 1
+            return finish(1)
         if not result.messages:
             print("No enabled remote feeds to refresh.")
-        return 0
+        return finish()
 
     try:
         agent, path = choose_guidance_target(
@@ -1787,7 +1796,7 @@ def main(argv: list[str] | None = None) -> int:
         )
     except KeyboardInterrupt:
         print("No changes applied.")
-        return 0
+        return finish()
 
     def current_options() -> tuple[Option, ...]:
         return options_for_agent(
@@ -1813,11 +1822,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.status:
         print_status(enabled, options, original)
-        return 0
+        return finish()
 
     if args.preview:
         print(render_block(enabled, options))
-        return 0
+        return finish()
 
     if args.apply or args.upgrade:
         backup = apply_compiled_config(path, original, enabled, options)
@@ -1825,13 +1834,13 @@ def main(argv: list[str] | None = None) -> int:
         if backup:
             print(f"Backup: {backup}")
         print_apply_summary(agent, enabled, options)
-        return 0
+        return finish()
 
     feed_results = None if args.no_feed_refresh else start_feed_refresh_thread()
     selected = interactive(path, original, enabled, options, feed_results, current_options)
     if selected is None:
         print("No changes applied.")
-        return 0
+        return finish()
 
     selected_enabled, selected_options = selected
     backup = apply_compiled_config(path, original, selected_enabled, selected_options)
@@ -1839,7 +1848,7 @@ def main(argv: list[str] | None = None) -> int:
     if backup:
         print(f"Backup: {backup}")
     print_apply_summary(agent, selected_enabled, selected_options)
-    return 0
+    return finish()
 
 
 if __name__ == "__main__":
