@@ -52,9 +52,10 @@ Options are tagged as `generic`, `claude`, or `codex`. Generic options are shown
 for both agents; Claude and Codex options are shown only for that selected agent.
 
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
-toggle an option, `R` to refresh a selected stale stanza, `U` to upgrade all
-enabled stanzas to the latest feed versions, `d` to delete a custom stanza after
-confirmation, `p` to preview, and enter or `a` to apply.
+toggle an option, `D` to view the complete stanza, `E` to erase a custom stanza
+after confirmation, `R` to refresh a selected stale stanza, `U` to upgrade all
+enabled stanzas to the latest feed versions, `P` to preview, `Q` to quit, and
+enter or `A` to apply. Uppercase and lowercase commands are both accepted.
 
 Check current option state:
 

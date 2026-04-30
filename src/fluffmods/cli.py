@@ -880,7 +880,7 @@ def print_menu(
 ) -> None:
     print("\033[2J\033[H", end="")
     print(f"fluffmods: {path}")
-    print("Use ↑/↓ to move, space to toggle, R to refresh selected, U to upgrade all, d to delete custom stanzas, enter/a to apply, p to preview, q to quit.")
+    print("Use ↑/↓ to move, space to toggle, D for details, E to erase custom stanzas, R to refresh selected, U to upgrade all, P to preview, Q to quit, enter/A to apply.")
     print()
 
     if not options:
@@ -1140,21 +1140,31 @@ def print_apply_summary(agent: str, enabled: set[str], options: tuple[Option, ..
 
 def delete_option_with_confirmation(option: Option) -> str:
     if option.source == "bundled" or option.source.startswith("feed:"):
-        return f"Cannot delete {option.option_id}; it comes from {option.source}. Toggle it off or remove the feed instead."
+        return f"Cannot erase {option.option_id}; it comes from {option.source}. Toggle it off or remove the feed instead."
 
     path = Path(option.source)
     if not path.exists():
-        return f"Cannot delete {option.option_id}; source file no longer exists: {path}"
+        return f"Cannot erase {option.option_id}; source file no longer exists: {path}"
 
     print("\033[2J\033[H", end="")
-    print(f"Delete stanza option: {option.label}")
+    print(f"Erase stanza option: {option.label}")
     print(f"File: {path}")
-    confirmation = input("Type 'delete' to permanently delete this stanza file: ").strip()
-    if confirmation != "delete":
-        return "Deletion cancelled."
+    confirmation = input("Type 'erase' to permanently erase this stanza file: ").strip()
+    if confirmation != "erase":
+        return "Erase cancelled."
 
     path.unlink()
-    return f"Deleted custom stanza: {option.option_id}"
+    return f"Erased custom stanza: {option.option_id}"
+
+
+def print_option_details(option: Option) -> None:
+    print("\033[2J\033[H", end="")
+    print(f"{option.label}")
+    print(f"ID: {option.option_id}")
+    print(f"Applies to: {option.applies_to}")
+    print(f"Source: {source_label(option)}")
+    print()
+    print(option.body.rstrip())
 
 
 def interactive(
@@ -1208,6 +1218,12 @@ def interactive(
                 print(render_block(enabled, options))
                 input("Press enter to return to the menu...")
                 continue
+            if key == "d":
+                if not options:
+                    continue
+                print_option_details(options[selected_index])
+                input("Press enter to return to the menu...")
+                continue
             if key in {"r", "R"}:
                 if not options:
                     continue
@@ -1237,12 +1253,12 @@ def interactive(
                 else:
                     enabled.add(option_id)
                 continue
-            if key == "d":
+            if key == "e":
                 if not options:
                     continue
                 option = options[selected_index]
                 feed_message = delete_option_with_confirmation(option)
-                if not feed_message.startswith("Cannot delete") and not feed_message.startswith("Deletion cancelled"):
+                if not feed_message.startswith("Cannot erase") and not feed_message.startswith("Erase cancelled"):
                     enabled.discard(option.option_id)
                     if reload_options:
                         options = reload_options()
@@ -1255,7 +1271,7 @@ def interactive(
                     continue
 
     print(f"fluffmods: {path}")
-    print("Toggle options by number. Commands: p=preview, a=apply, r <number>=refresh, u=upgrade all, d <number>=delete custom stanza, q=quit")
+    print("Toggle options by number. Commands: d <number>=details, e <number>=erase custom stanza, p=preview, a=apply, r <number>=refresh, u=upgrade all, q=quit")
 
     while True:
         print()
@@ -1271,6 +1287,18 @@ def interactive(
         if choice in {"p", "preview"}:
             print()
             print(render_block(enabled, options))
+            continue
+        if choice.startswith("d") or choice.startswith("details"):
+            parts = choice.split()
+            if len(parts) != 2 or not parts[1].isdigit():
+                print("Enter d followed by an option number, for example: d 3")
+                continue
+            index = int(parts[1]) - 1
+            if 0 <= index < len(options):
+                print()
+                print_option_details(options[index])
+                continue
+            print("Option number out of range.")
             continue
         if choice.startswith("r"):
             parts = choice.split()
@@ -1288,16 +1316,16 @@ def interactive(
                 continue
             print("Option number out of range.")
             continue
-        if choice.startswith("d"):
+        if choice.startswith("e") or choice.startswith("erase"):
             parts = choice.split()
             if len(parts) != 2 or not parts[1].isdigit():
-                print("Enter d followed by an option number, for example: d 3")
+                print("Enter e followed by an option number, for example: e 3")
                 continue
             index = int(parts[1]) - 1
             if 0 <= index < len(options):
                 message = delete_option_with_confirmation(options[index])
                 print(message)
-                if message.startswith("Deleted"):
+                if message.startswith("Erased"):
                     enabled.discard(options[index].option_id)
                     options = reload_options() if reload_options else tuple(
                         option for i, option in enumerate(options) if i != index

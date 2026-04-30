@@ -26,6 +26,7 @@ from fluffmods.cli import (
     parse_enabled,
     parse_installed_option_metadata,
     parse_custom_option,
+    print_option_details,
     recover_enabled_from_backups,
     potential_conflicts,
     render_block,
@@ -251,11 +252,11 @@ applies_to: robots
             option = Option("extra", "Extra", "# Extra", source=str(path))
 
             with patch("builtins.input", return_value="no"), patch("sys.stdout", new_callable=StringIO):
-                self.assertEqual(delete_option_with_confirmation(option), "Deletion cancelled.")
+                self.assertEqual(delete_option_with_confirmation(option), "Erase cancelled.")
             self.assertTrue(path.exists())
 
-            with patch("builtins.input", return_value="delete"), patch("sys.stdout", new_callable=StringIO):
-                self.assertEqual(delete_option_with_confirmation(option), "Deleted custom stanza: extra")
+            with patch("builtins.input", return_value="erase"), patch("sys.stdout", new_callable=StringIO):
+                self.assertEqual(delete_option_with_confirmation(option), "Erased custom stanza: extra")
             self.assertFalse(path.exists())
 
     def test_delete_feed_option_is_rejected(self) -> None:
@@ -263,7 +264,24 @@ applies_to: robots
 
         message = delete_option_with_confirmation(option)
 
-        self.assertIn("Cannot delete feed-option", message)
+        self.assertIn("Cannot erase feed-option", message)
+
+    def test_print_option_details_shows_complete_stanza(self) -> None:
+        option = Option(
+            "details",
+            "Details",
+            "# Details\n\nLine one.\nLine two.",
+            applies_to="claude",
+            source="feed:RAS list",
+            version="1.0.0",
+        )
+        with patch("sys.stdout", new_callable=StringIO) as output:
+            print_option_details(option)
+
+        text = output.getvalue()
+        self.assertIn("ID: details", text)
+        self.assertIn("Applies to: claude", text)
+        self.assertIn("Line one.\nLine two.", text)
 
     def test_suspicious_directive_scan_flags_compromised_feed_language(self) -> None:
         option = Option(
