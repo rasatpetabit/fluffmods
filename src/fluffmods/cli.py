@@ -5,6 +5,7 @@ import hashlib
 import json
 import queue
 import re
+import select
 import shutil
 import subprocess
 import sys
@@ -1371,6 +1372,79 @@ def run_agent_analysis(
     raise RuntimeError(detail)
 
 
+def completed_agent_analysis(command: list[str], stdout: str | None, stderr: str | None, returncode: int | None) -> str:
+    output = (stdout or "").strip()
+    error = (stderr or "").strip()
+    if returncode == 0 and output:
+        return output
+    detail = error or output or f"{command[0]} exited with status {returncode}"
+    raise RuntimeError(detail)
+
+
+def stop_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=2)
+
+
+def run_agent_analysis_with_quit(agent: str, enabled: set[str], options: tuple[Option, ...]) -> str:
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return run_agent_analysis(agent, enabled, options)
+
+    prompt = build_agent_analysis_prompt(enabled, options)
+    command = agent_analysis_command(agent)
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    results: queue.Queue[tuple[str | None, str | None, int | None, BaseException | None]] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            stdout, stderr = process.communicate(prompt, timeout=90)
+            results.put((stdout, stderr, process.returncode, None))
+        except BaseException as exc:
+            results.put((None, None, process.returncode, exc))
+
+    thread = threading.Thread(target=worker, name="fluffmods-agent-analysis", daemon=True)
+    thread.start()
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while True:
+            try:
+                stdout, stderr, returncode, error = results.get(timeout=0.1)
+            except queue.Empty:
+                try:
+                    readable, _, _ = select.select([sys.stdin], [], [], 0)
+                except (OSError, ValueError):
+                    readable = []
+                if readable:
+                    key = sys.stdin.read(1).lower()
+                    if key == "q":
+                        stop_process(process)
+                        thread.join(timeout=2)
+                        raise RuntimeError("analysis skipped by user")
+                continue
+
+            if error:
+                raise error
+            return completed_agent_analysis(command, stdout, stderr, returncode)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
 def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]) -> None:
     conflicts = potential_conflicts(enabled, options)
     print("Heuristic potential stanza conflicts:")
@@ -1390,9 +1464,12 @@ def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]
 
 
 def print_apply_summary(agent: str, enabled: set[str], options: tuple[Option, ...]) -> None:
-    print(f"AI agent analysis ({agent}):")
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        print(f"AI agent analysis ({agent}; this can take a moment, or hit Q to quit):")
+    else:
+        print(f"AI agent analysis ({agent}):")
     try:
-        print(run_agent_analysis(agent, enabled, options))
+        print(run_agent_analysis_with_quit(agent, enabled, options))
     except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
         print(f"- Could not run {agent} analysis: {exc}")
     print()

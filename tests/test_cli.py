@@ -33,6 +33,7 @@ from fluffmods.cli import (
     parse_installed_option_metadata,
     parse_custom_option,
     print_menu,
+    print_apply_summary,
     print_option_details,
     print_status,
     recover_enabled_from_backups,
@@ -415,6 +416,21 @@ applies_to: robots
         self.assertIn("Selected stanzas:", calls[0][1]["input"])
         self.assertTrue(calls[0][1]["capture_output"])
         self.assertFalse(calls[0][1]["check"])
+
+    def test_apply_summary_shows_q_hint_when_agent_analysis_may_wait(self) -> None:
+        stdout = StringIO()
+        stdout.isatty = lambda: True  # type: ignore[method-assign]
+
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("sys.stdout", stdout),
+            patch("fluffmods.cli.run_agent_analysis_with_quit", return_value="Looks good."),
+        ):
+            print_apply_summary("claude", set(), tuple())
+
+        text = stdout.getvalue()
+        self.assertIn("AI agent analysis (claude; this can take a moment, or hit Q to quit):", text)
+        self.assertIn("Looks good.", text)
 
 
 class TargetSelectionTests(unittest.TestCase):
