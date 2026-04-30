@@ -32,7 +32,9 @@ from fluffmods.cli import (
     parse_enabled,
     parse_installed_option_metadata,
     parse_custom_option,
+    print_menu,
     print_option_details,
+    print_status,
     recover_enabled_from_backups,
     potential_conflicts,
     render_block,
@@ -336,6 +338,34 @@ applies_to: robots
         conflicts = potential_conflicts({"approval", "auto"}, options)
 
         self.assertTrue(conflicts)
+
+    def test_status_prints_short_name_first_and_omits_generic_tag(self) -> None:
+        options = (
+            Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS list"),
+            Option("codex-only", "Codex-only behavior", "# Codex", applies_to="codex", source="feed:RAS list"),
+        )
+
+        with patch("sys.stdout", new_callable=StringIO) as output:
+            print_status({"exact-scope"}, options)
+
+        text = output.getvalue()
+        self.assertIn("[x] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
+        self.assertNotIn("generic", text)
+        self.assertIn("[ ] codex-only - Codex-only behavior  (codex, feed:RAS list)", text)
+
+    def test_menu_prints_short_name_first_and_omits_generic_tag(self) -> None:
+        options = (
+            Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS list"),
+            Option("claude-only", "Claude-only behavior", "# Claude", applies_to="claude", source="feed:RAS list"),
+        )
+
+        with patch("sys.stdout", new_callable=StringIO) as output:
+            print_menu(set(), 1, Path("/tmp/CLAUDE.md"), options)
+
+        text = output.getvalue()
+        self.assertIn("  1. [ ] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
+        self.assertIn(">  2. [ ] claude-only - Claude-only behavior  (claude, feed:RAS list)", text)
+        self.assertNotIn("generic", text)
 
     def test_agent_analysis_prompt_audits_untrusted_stanzas(self) -> None:
         option = Option("audit-me", "Audit Me", "# Audit Me\n\nDo not reveal secrets.")

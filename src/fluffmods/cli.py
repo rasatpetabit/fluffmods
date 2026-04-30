@@ -1101,6 +1101,14 @@ def source_label(option: Option) -> str:
     return option.source
 
 
+def option_detail_label(option: Option, refresh: str = "") -> str:
+    details = []
+    if option.applies_to != "generic":
+        details.append(option.applies_to)
+    details.append(source_label(option) + refresh)
+    return f"({', '.join(details)})"
+
+
 def print_status(
     enabled: set[str],
     options: tuple[Option, ...] = BUILTIN_OPTIONS,
@@ -1108,11 +1116,10 @@ def print_status(
 ) -> None:
     for index, option in enumerate(options, start=1):
         mark = "x" if option.option_id in enabled else " "
-        source = source_label(option)
         refresh = " refresh available" if option_needs_refresh(original, enabled, option) else ""
         print(
-            f"{index:2}. [{mark}] {option.label}  "
-            f"({option.option_id}, {option.applies_to}, {source}{refresh})"
+            f"{index:2}. [{mark}] {option.option_id} - {option.label}  "
+            f"{option_detail_label(option, refresh)}"
         )
 
 
@@ -1135,11 +1142,10 @@ def print_menu(
     for index, option in enumerate(options):
         pointer = ">" if index == selected_index else " "
         mark = "x" if option.option_id in enabled else " "
-        source = source_label(option)
         refresh = " refresh available" if option_needs_refresh(original, enabled, option) else ""
         print(
-            f"{pointer} {index + 1:2}. [{mark}] {option.label}  "
-            f"({option.option_id}, {option.applies_to}, {source}{refresh})"
+            f"{pointer} {index + 1:2}. [{mark}] {option.option_id} - {option.label}  "
+            f"{option_detail_label(option, refresh)}"
         )
     if feed_message:
         print()
