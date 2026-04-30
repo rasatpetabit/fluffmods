@@ -1,14 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import json
+import queue
 import re
 import shutil
 import sys
 import termios
+import threading
+import time
 import tty
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Callable
+from urllib.error import URLError
+from urllib.request import urlopen
 
 
 BEGIN = "<!-- BEGIN FLUFF-MODS OPTIONS -->"
@@ -16,6 +23,8 @@ END = "<!-- END FLUFF-MODS OPTIONS -->"
 META_PREFIX = "<!-- fluffmods: enabled="
 AGENTS = ("claude", "codex")
 APPLIES_TO = ("generic", "claude", "codex")
+DEFAULT_RAS_FEED_URL = "https://raw.githubusercontent.com/rasatpetabit/fluffmods/main/feeds/ras-list/feed.json"
+FEED_REFRESH_INTERVAL_SECONDS = 60 * 60
 
 
 @dataclass(frozen=True)
@@ -25,6 +34,21 @@ class Option:
     body: str
     applies_to: str = "generic"
     source: str = "bundled"
+
+
+@dataclass(frozen=True)
+class Feed:
+    feed_id: str
+    name: str
+    url: str | None = None
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class FeedRefreshResult:
+    refreshed: bool
+    failed: bool
+    messages: tuple[str, ...]
 
 
 BUILTIN_OPTIONS: tuple[Option, ...] = (
@@ -182,6 +206,245 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def write_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def config_dir() -> Path:
+    return Path.home() / ".config" / "fluffmods"
+
+
+def cache_dir() -> Path:
+    return Path.home() / ".cache" / "fluffmods"
+
+
+def bundled_feed_dir(feed_id: str) -> Path | None:
+    candidates = [
+        Path(__file__).resolve().parents[2] / "feeds" / feed_id,
+        Path(__file__).resolve().parent / "feeds" / feed_id,
+    ]
+    for candidate in candidates:
+        if (candidate / "feed.json").exists():
+            return candidate
+    return None
+
+
+def default_feeds() -> list[Feed]:
+    return [Feed(feed_id="ras-list", name="RAS list", url=DEFAULT_RAS_FEED_URL)]
+
+
+def feeds_config_path() -> Path:
+    return config_dir() / "feeds.json"
+
+
+def load_feed_subscriptions() -> list[Feed]:
+    path = feeds_config_path()
+    if not path.exists():
+        return default_feeds()
+
+    raw = json.loads(read_text(path))
+    feeds = raw.get("feeds", raw if isinstance(raw, list) else [])
+    subscriptions: list[Feed] = []
+    for item in feeds:
+        feed_id = item["id"]
+        subscriptions.append(
+            Feed(
+                feed_id=feed_id,
+                name=item.get("name", feed_id),
+                url=item.get("url"),
+                enabled=item.get("enabled", True),
+            )
+        )
+    return subscriptions
+
+
+def save_feed_subscriptions(feeds: list[Feed]) -> None:
+    payload = {
+        "feeds": [
+            {
+                "id": feed.feed_id,
+                "name": feed.name,
+                "url": feed.url,
+                "enabled": feed.enabled,
+            }
+            for feed in feeds
+        ]
+    }
+    write_text(feeds_config_path(), json.dumps(payload, indent=2) + "\n")
+
+
+def feed_cache_dir(feed: Feed) -> Path:
+    return cache_dir() / "feeds" / slugify_option_id(feed.feed_id)
+
+
+def feed_last_refresh_path(feed: Feed) -> Path:
+    return feed_cache_dir(feed) / ".last_refreshed"
+
+
+def feed_last_refresh_time(feed: Feed) -> float | None:
+    path = feed_last_refresh_path(feed)
+    if not path.exists():
+        return None
+    try:
+        return float(read_text(path).strip())
+    except ValueError:
+        return None
+
+
+def feed_refresh_due(feed: Feed, now: float | None = None) -> bool:
+    if not feed.url:
+        return False
+    last_refresh = feed_last_refresh_time(feed)
+    if last_refresh is None:
+        return True
+    return (now or time.time()) - last_refresh >= FEED_REFRESH_INTERVAL_SECONDS
+
+
+def fetch_url(url: str, timeout: float = 1.5) -> str:
+    with urlopen(url, timeout=timeout) as response:
+        return response.read().decode("utf-8")
+
+
+def feed_from_url(url: str, feed_id: str | None = None, name: str | None = None) -> Feed:
+    manifest = json.loads(fetch_url(url, timeout=5.0))
+    resolved_id = feed_id or manifest.get("id") or slugify_option_id(url)
+    return Feed(
+        feed_id=slugify_option_id(resolved_id),
+        name=name or manifest.get("name") or resolved_id,
+        url=url,
+        enabled=True,
+    )
+
+
+def add_feed_subscription(url: str, feed_id: str | None = None, name: str | None = None) -> Feed:
+    feed = feed_from_url(url, feed_id=feed_id, name=name)
+    feeds = [existing for existing in load_feed_subscriptions() if existing.feed_id != feed.feed_id]
+    feeds.append(feed)
+    save_feed_subscriptions(feeds)
+    return feed
+
+
+def remove_feed_subscription(feed_id: str) -> bool:
+    normalized = slugify_option_id(feed_id)
+    feeds = load_feed_subscriptions()
+    kept = [feed for feed in feeds if feed.feed_id != normalized]
+    if len(kept) == len(feeds):
+        return False
+    save_feed_subscriptions(kept)
+    return True
+
+
+def print_feed_subscriptions() -> None:
+    for feed in load_feed_subscriptions():
+        status = "enabled" if feed.enabled else "disabled"
+        last_refresh = feed_last_refresh_time(feed)
+        if last_refresh is None:
+            refresh_text = "never"
+        else:
+            refresh_text = datetime.fromtimestamp(last_refresh).isoformat(timespec="seconds")
+        print(f"{feed.feed_id}: {feed.name} ({status}, refreshed {refresh_text})")
+        if feed.url:
+            print(f"  {feed.url}")
+
+
+def feed_base_url(feed_url: str) -> str:
+    return feed_url.rsplit("/", 1)[0] + "/"
+
+
+def update_feed_cache(feed: Feed) -> bool:
+    if not feed.url:
+        return False
+
+    manifest_text = fetch_url(feed.url)
+    manifest = json.loads(manifest_text)
+    target_dir = feed_cache_dir(feed)
+    write_text(target_dir / "feed.json", json.dumps(manifest, indent=2) + "\n")
+
+    base_url = feed_base_url(feed.url)
+    for option_file in manifest.get("options", []):
+        option_text = fetch_url(base_url + option_file)
+        write_text(target_dir / option_file, option_text)
+
+    write_text(feed_last_refresh_path(feed), str(time.time()) + "\n")
+    return True
+
+
+def refresh_due_feeds(force: bool = False) -> FeedRefreshResult:
+    messages: list[str] = []
+    refreshed = False
+    failed = False
+    now = time.time()
+
+    for feed in load_feed_subscriptions():
+        if not feed.enabled:
+            continue
+        if not force and not feed_refresh_due(feed, now):
+            continue
+        try:
+            if update_feed_cache(feed):
+                refreshed = True
+                messages.append(f"Refreshed feed: {feed.name}")
+        except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            failed = True
+            messages.append(f"Feed refresh failed for {feed.name}: {exc}")
+
+    return FeedRefreshResult(refreshed=refreshed, failed=failed, messages=tuple(messages))
+
+
+def start_feed_refresh_thread(force: bool = False) -> queue.Queue[FeedRefreshResult] | None:
+    if not force and not any(
+        feed.enabled and feed_refresh_due(feed) for feed in load_feed_subscriptions()
+    ):
+        return None
+
+    results: queue.Queue[FeedRefreshResult] = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        results.put(refresh_due_feeds(force=force))
+
+    thread = threading.Thread(target=worker, name="fluffmods-feed-refresh", daemon=True)
+    thread.start()
+    return results
+
+
+def load_options_from_feed_dir(directory: Path, feed_name: str) -> list[Option]:
+    manifest_path = directory / "feed.json"
+    if not manifest_path.exists():
+        return []
+
+    manifest = json.loads(read_text(manifest_path))
+    options: list[Option] = []
+    for option_file in manifest.get("options", []):
+        option = parse_custom_option(directory / option_file)
+        options.append(
+            Option(
+                option_id=option.option_id,
+                label=option.label,
+                body=option.body,
+                applies_to=option.applies_to,
+                source=f"feed:{feed_name}",
+            )
+        )
+    return options
+
+
+def load_feed_options() -> tuple[Option, ...]:
+    options: list[Option] = []
+    for feed in load_feed_subscriptions():
+        if not feed.enabled:
+            continue
+
+        cache_path = feed_cache_dir(feed)
+        feed_options = load_options_from_feed_dir(cache_path, feed.name)
+        if not feed_options:
+            bundled_path = bundled_feed_dir(feed.feed_id)
+            if bundled_path:
+                feed_options = load_options_from_feed_dir(bundled_path, feed.name)
+        options.extend(feed_options)
+    return tuple(options)
+
+
 def project_guidance_candidates(directory: Path, agent: str) -> tuple[Path, ...]:
     if agent == "codex":
         return (
@@ -305,8 +568,11 @@ def default_option_dirs() -> list[Path]:
     ]
 
 
-def load_options(extra_dirs: list[str] | None = None, include_default_dirs: bool = True) -> tuple[Option, ...]:
-    options = list(BUILTIN_OPTIONS)
+def load_options(
+    extra_dirs: list[str] | None = None,
+    include_default_dirs: bool = True,
+) -> tuple[Option, ...]:
+    options = list(load_feed_options())
     seen = {option.option_id for option in options}
     dirs = default_option_dirs() if include_default_dirs else []
     dirs.extend(Path(item).expanduser() for item in extra_dirs or [])
@@ -410,7 +676,7 @@ def write_with_backup(path: Path, content: str) -> Path | None:
 def print_status(enabled: set[str], options: tuple[Option, ...] = BUILTIN_OPTIONS) -> None:
     for index, option in enumerate(options, start=1):
         mark = "x" if option.option_id in enabled else " "
-        source = "bundled" if option.source == "bundled" else "custom"
+        source = option.source if option.source.startswith("feed:") else option.source
         print(
             f"{index:2}. [{mark}] {option.label}  "
             f"({option.option_id}, {option.applies_to}, {source})"
@@ -422,20 +688,27 @@ def print_menu(
     selected_index: int,
     path: Path,
     options: tuple[Option, ...],
+    feed_message: str | None = None,
 ) -> None:
     print("\033[2J\033[H", end="")
     print(f"fluffmods: {path}")
-    print("Use ↑/↓ to move, space to toggle, enter/a to apply, p to preview, q to quit.")
+    print("Use ↑/↓ to move, space to toggle, d to delete custom stanzas, enter/a to apply, p to preview, q to quit.")
     print()
+
+    if not options:
+        print("No stanza options found.")
 
     for index, option in enumerate(options):
         pointer = ">" if index == selected_index else " "
         mark = "x" if option.option_id in enabled else " "
-        source = "bundled" if option.source == "bundled" else "custom"
+        source = option.source if option.source.startswith("feed:") else option.source
         print(
             f"{pointer} {index + 1:2}. [{mark}] {option.label}  "
             f"({option.option_id}, {option.applies_to}, {source})"
         )
+    if feed_message:
+        print()
+        print(feed_message)
 
 
 def read_key() -> str:
@@ -480,11 +753,57 @@ def normalize_ids(ids: list[str], options: tuple[Option, ...]) -> set[str]:
     return set(ids)
 
 
-def interactive(path: Path, enabled: set[str], options: tuple[Option, ...]) -> set[str] | None:
+def delete_option_with_confirmation(option: Option) -> str:
+    if option.source == "bundled" or option.source.startswith("feed:"):
+        return f"Cannot delete {option.option_id}; it comes from {option.source}. Toggle it off or remove the feed instead."
+
+    path = Path(option.source)
+    if not path.exists():
+        return f"Cannot delete {option.option_id}; source file no longer exists: {path}"
+
+    print("\033[2J\033[H", end="")
+    print(f"Delete stanza option: {option.label}")
+    print(f"File: {path}")
+    confirmation = input("Type 'delete' to permanently delete this stanza file: ").strip()
+    if confirmation != "delete":
+        return "Deletion cancelled."
+
+    path.unlink()
+    return f"Deleted custom stanza: {option.option_id}"
+
+
+def interactive(
+    path: Path,
+    enabled: set[str],
+    options: tuple[Option, ...],
+    feed_results: queue.Queue[FeedRefreshResult] | None = None,
+    reload_options: Callable[[], tuple[Option, ...]] | None = None,
+) -> tuple[set[str], tuple[Option, ...]] | None:
+    feed_message = "Checking feeds in the background..." if feed_results else None
+
     if sys.stdin.isatty() and sys.stdout.isatty():
         selected_index = 0
         while True:
-            print_menu(enabled, selected_index, path, options)
+            if feed_results:
+                try:
+                    result = feed_results.get_nowait()
+                except queue.Empty:
+                    pass
+                else:
+                    feed_results = None
+                    if result.messages:
+                        feed_message = " | ".join(result.messages)
+                    elif result.refreshed:
+                        feed_message = "Feeds refreshed."
+                    elif result.failed:
+                        feed_message = "Feed refresh failed."
+                    else:
+                        feed_message = "Feeds are already current."
+                    if result.refreshed and reload_options:
+                        options = reload_options()
+                        selected_index = min(selected_index, max(len(options) - 1, 0))
+
+            print_menu(enabled, selected_index, path, options, feed_message)
             key = read_key()
 
             if key == "q":
@@ -494,24 +813,41 @@ def interactive(path: Path, enabled: set[str], options: tuple[Option, ...]) -> s
                 continue
             if key in {"a", "enter"}:
                 print("\033[2J\033[H", end="")
-                return enabled
+                return enabled, options
             if key == "p":
                 print("\033[2J\033[H", end="")
                 print(render_block(enabled, options))
                 input("Press enter to return to the menu...")
                 continue
             if key in {"up", "k"}:
+                if not options:
+                    continue
                 selected_index = (selected_index - 1) % len(options)
                 continue
             if key in {"down", "j"}:
+                if not options:
+                    continue
                 selected_index = (selected_index + 1) % len(options)
                 continue
             if key == "space":
+                if not options:
+                    continue
                 option_id = options[selected_index].option_id
                 if option_id in enabled:
                     enabled.remove(option_id)
                 else:
                     enabled.add(option_id)
+                continue
+            if key == "d":
+                if not options:
+                    continue
+                option = options[selected_index]
+                feed_message = delete_option_with_confirmation(option)
+                if not feed_message.startswith("Cannot delete") and not feed_message.startswith("Deletion cancelled"):
+                    enabled.discard(option.option_id)
+                    if reload_options:
+                        options = reload_options()
+                        selected_index = min(selected_index, max(len(options) - 1, 0))
                 continue
             if key.isdigit():
                 index = int(key) - 1
@@ -520,7 +856,7 @@ def interactive(path: Path, enabled: set[str], options: tuple[Option, ...]) -> s
                     continue
 
     print(f"fluffmods: {path}")
-    print("Toggle options by number. Commands: p=preview, a=apply, q=quit")
+    print("Toggle options by number. Commands: p=preview, a=apply, d <number>=delete custom stanza, q=quit")
 
     while True:
         print()
@@ -530,10 +866,27 @@ def interactive(path: Path, enabled: set[str], options: tuple[Option, ...]) -> s
         if choice in {"q", "quit", "exit"}:
             return None
         if choice in {"a", "apply"}:
-            return enabled
+            return enabled, options
         if choice in {"p", "preview"}:
             print()
             print(render_block(enabled, options))
+            continue
+        if choice.startswith("d"):
+            parts = choice.split()
+            if len(parts) != 2 or not parts[1].isdigit():
+                print("Enter d followed by an option number, for example: d 3")
+                continue
+            index = int(parts[1]) - 1
+            if 0 <= index < len(options):
+                message = delete_option_with_confirmation(options[index])
+                print(message)
+                if message.startswith("Deleted"):
+                    enabled.discard(options[index].option_id)
+                    options = reload_options() if reload_options else tuple(
+                        option for i, option in enumerate(options) if i != index
+                    )
+                continue
+            print("Option number out of range.")
             continue
         if not choice:
             continue
@@ -551,7 +904,10 @@ def interactive(path: Path, enabled: set[str], options: tuple[Option, ...]) -> s
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Claude + Fluff-Mods: checkbox-style manager for Claude Code and Codex guidance."
+        description=(
+            "Claude + Fluff-Mods: multi-agent guidance manager with curated feeds "
+            "for Claude Code, Codex, and custom agent stanzas."
+        )
     )
     parser.add_argument(
         "--agent",
@@ -580,6 +936,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Do not auto-load ~/.config/fluffmods/options or ./.fluffmods/options",
     )
+    parser.add_argument("--feed-list", action="store_true", help="List subscribed feeds")
+    parser.add_argument("--feed-add", metavar="URL", help="Subscribe to a feed.json URL")
+    parser.add_argument("--feed-remove", metavar="ID", help="Remove a subscribed feed")
+    parser.add_argument("--feed-id", help="Override the id when adding a feed")
+    parser.add_argument("--feed-name", help="Override the name when adding a feed")
+    parser.add_argument("--feed-refresh", action="store_true", help="Refresh subscribed feeds now")
+    parser.add_argument("--no-feed-refresh", action="store_true", help="Skip background feed refresh")
     return parser
 
 
@@ -590,6 +953,33 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--global and --project are mutually exclusive")
     agent = args.agent_override or args.agent
 
+    if args.feed_list:
+        print_feed_subscriptions()
+        return 0
+    if args.feed_add:
+        try:
+            feed = add_feed_subscription(args.feed_add, feed_id=args.feed_id, name=args.feed_name)
+        except (OSError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+            print(f"Could not add feed: {exc}", file=sys.stderr)
+            return 1
+        print(f"Added feed {feed.feed_id}: {feed.name}")
+        return 0
+    if args.feed_remove:
+        if remove_feed_subscription(args.feed_remove):
+            print(f"Removed feed {args.feed_remove}")
+            return 0
+        print(f"Feed not found: {args.feed_remove}", file=sys.stderr)
+        return 1
+    if args.feed_refresh:
+        result = refresh_due_feeds(force=True)
+        for message in result.messages:
+            print(message)
+        if result.failed:
+            return 1
+        if not result.messages:
+            print("No enabled remote feeds to refresh.")
+        return 0
+
     try:
         path = choose_target_path(args.file, args.assume_global, args.assume_project, agent)
     except KeyboardInterrupt:
@@ -598,8 +988,13 @@ def main(argv: list[str] | None = None) -> int:
 
     original = read_text(path)
     enabled = parse_enabled(original)
-    all_options = load_options(args.options_dir, not args.no_default_option_dirs)
-    options = options_for_agent(all_options, agent)
+    def current_options() -> tuple[Option, ...]:
+        return options_for_agent(
+            load_options(args.options_dir, not args.no_default_option_dirs),
+            agent,
+        )
+
+    options = current_options()
 
     enabled.update(normalize_ids(args.enable, options))
     enabled.difference_update(normalize_ids(args.disable, options))
@@ -620,12 +1015,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Backup: {backup}")
         return 0
 
-    selected = interactive(path, enabled, options)
+    feed_results = None if args.no_feed_refresh else start_feed_refresh_thread()
+    selected = interactive(path, enabled, options, feed_results, current_options)
     if selected is None:
         print("No changes applied.")
         return 0
 
-    compiled = compile_claude_md(original, selected, options)
+    selected_enabled, selected_options = selected
+    compiled = compile_claude_md(original, selected_enabled, selected_options)
     backup = write_with_backup(path, compiled)
     print(f"Updated {path}")
     if backup:

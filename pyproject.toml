@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "Fluff-Mods"
 version = "0.1.0"
-description = "Claude + Fluff-Mods: a checkbox-style manager for toggleable Claude Code and Codex guidance."
+description = "Claude + Fluff-Mods: multi-agent guidance manager with curated feeds for Claude Code, Codex, and custom agent stanzas."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -36,3 +36,6 @@ fluffmods = "fluffmods.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+fluffmods = ["feeds/ras-list/*.json", "feeds/ras-list/*.md"]

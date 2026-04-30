@@ -1,0 +1,19 @@
+{
+  "id": "ras-list",
+  "name": "RAS list",
+  "author": "RAS",
+  "description": "Default Fluff-Mods guidance stanzas curated by RAS.",
+  "options": [
+    "codex-delegation.md",
+    "verify-before-complete.md",
+    "protect-user-work.md",
+    "review-findings-first.md",
+    "plan-complex-work.md",
+    "prefer-project-runbooks.md",
+    "concise-final-report.md",
+    "durable-handoff.md",
+    "ask-for-risky-actions.md",
+    "exact-scope.md",
+    "output-important-command-results.md"
+  ]
+}

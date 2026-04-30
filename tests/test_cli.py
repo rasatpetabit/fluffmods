@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 from fluffmods.cli import (
     BEGIN,
     END,
+    Option,
     choose_target_path,
     compile_claude_md,
+    delete_option_with_confirmation,
     global_guidance_path,
     load_options,
     nearest_project_guidance_path,
@@ -151,6 +155,27 @@ applies_to: robots
 
             with self.assertRaises(ValueError):
                 parse_custom_option(path)
+
+    def test_delete_custom_option_requires_literal_confirmation(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "extra.md"
+            path.write_text("# Extra\n", encoding="utf-8")
+            option = Option("extra", "Extra", "# Extra", source=str(path))
+
+            with patch("builtins.input", return_value="no"), patch("sys.stdout", new_callable=StringIO):
+                self.assertEqual(delete_option_with_confirmation(option), "Deletion cancelled.")
+            self.assertTrue(path.exists())
+
+            with patch("builtins.input", return_value="delete"), patch("sys.stdout", new_callable=StringIO):
+                self.assertEqual(delete_option_with_confirmation(option), "Deleted custom stanza: extra")
+            self.assertFalse(path.exists())
+
+    def test_delete_feed_option_is_rejected(self) -> None:
+        option = Option("feed-option", "Feed Option", "# Feed", source="feed:RAS list")
+
+        message = delete_option_with_confirmation(option)
+
+        self.assertIn("Cannot delete feed-option", message)
 
 
 class TargetSelectionTests(unittest.TestCase):

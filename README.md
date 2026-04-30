@@ -1,12 +1,13 @@
 # Fluff-Mods
 
-`Claude + Fluff-Mods` is a small checkbox-style CLI for turning long Claude Code
-and Codex behavior directives into simple on/off options. It ships with a small
-catalog of pre-packaged stanzas and can load your own Markdown stanzas from local
-option directories.
+`Claude + Fluff-Mods` is a multi-agent guidance manager for turning long agent
+behavior directives into simple on/off options. It supports Claude Code, Codex,
+and custom agent guidance files; ships with manicured built-in feeds; and lets
+users subscribe to additional feeds from their favorite authors.
 
 It edits one managed block in the selected guidance file and leaves the rest of
 the file alone. Claude targets use `CLAUDE.md`; Codex targets use `AGENTS.md`.
+The default feed is `RAS list`, which is enabled natively.
 
 ## Install
 
@@ -50,7 +51,8 @@ Options are tagged as `generic`, `claude`, or `codex`. Generic options are shown
 for both agents; Claude and Codex options are shown only for that selected agent.
 
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
-toggle an option, `p` to preview, and enter or `a` to apply.
+toggle an option, `d` to delete a custom stanza after confirmation, `p` to
+preview, and enter or `a` to apply.
 
 Check current option state:
 
@@ -94,7 +96,23 @@ Load custom stanza files from a directory:
 fluffmods --options-dir ./my-claude-options --status
 ```
 
+Manage feeds:
+
+```sh
+fluffmods --feed-list
+fluffmods --feed-add https://example.com/path/to/feed.json
+fluffmods --feed-remove feed-id
+fluffmods --feed-refresh
+```
+
+Fluff-Mods loads the currently installed feed cache immediately. In interactive
+mode, it checks enabled remote feeds in the background when a feed has not been
+refreshed for more than an hour, then tells you whether refresh succeeded or
+failed.
+
 ## Included Options
+
+These ship in the default `RAS list` feed.
 
 - `codex-delegation` (`codex`): Automatically dispatch simple and well-defined coding tasks to Codex.
 - `verify-before-complete` (`generic`): Require local verification before claiming implementation work is done.
