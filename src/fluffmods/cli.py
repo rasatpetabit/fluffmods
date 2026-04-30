@@ -821,8 +821,19 @@ def write_with_backup(path: Path, content: str) -> Path | None:
     return backup
 
 
+def option_was_installed(original: str, option: Option) -> bool:
+    metadata = parse_installed_option_metadata(original)
+    return (
+        option.option_id in parse_enabled(original)
+        or option.option_id in metadata
+        or normalize_body(option.body) in normalize_body(original)
+    )
+
+
 def option_needs_refresh(original: str, enabled: set[str], option: Option) -> bool:
     if option.option_id not in enabled:
+        return False
+    if not option_was_installed(original, option):
         return False
 
     block = extract_managed_block(original) or ""
@@ -1073,7 +1084,7 @@ Selected stanzas:
 """
 
 
-def agent_analysis_command(agent: str, prompt: str) -> list[str]:
+def agent_analysis_command(agent: str) -> list[str]:
     if agent == "codex":
         return [
             "codex",
@@ -1082,9 +1093,9 @@ def agent_analysis_command(agent: str, prompt: str) -> list[str]:
             "read-only",
             "--ephemeral",
             "--skip-git-repo-check",
-            prompt,
+            "-",
         ]
-    return ["claude", "-p", "--tools", "", "--no-session-persistence", prompt]
+    return ["claude", "-p", "--tools", "", "--no-session-persistence"]
 
 
 def run_agent_analysis(
@@ -1094,9 +1105,10 @@ def run_agent_analysis(
     runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
 ) -> str:
     prompt = build_agent_analysis_prompt(enabled, options)
-    command = agent_analysis_command(agent, prompt)
+    command = agent_analysis_command(agent)
     result = runner(
         command,
+        input=prompt,
         capture_output=True,
         text=True,
         timeout=90,

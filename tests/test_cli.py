@@ -23,6 +23,7 @@ from fluffmods.cli import (
     nearest_project_guidance_path,
     options_for_agent,
     option_needs_refresh,
+    option_was_installed,
     parse_enabled,
     parse_installed_option_metadata,
     parse_custom_option,
@@ -65,6 +66,12 @@ class ConfigCompileTests(unittest.TestCase):
         original = render_block({"refresh-me"}, (old_option,))
 
         self.assertTrue(option_needs_refresh(original, {"refresh-me"}, new_option))
+
+    def test_newly_selected_option_does_not_need_refresh(self) -> None:
+        option = Option("new-option", "New Option", "# New Option\n\nUse this.")
+
+        self.assertFalse(option_was_installed("# Config\n", option))
+        self.assertFalse(option_needs_refresh("# Config\n", {"new-option"}, option))
 
     def test_infer_enabled_from_existing_exact_stanza_body(self) -> None:
         option = Option("already-there", "Already There", "# Already There\n\nUse this behavior.")
@@ -316,11 +323,11 @@ applies_to: robots
 
     def test_agent_analysis_command_matches_target_agent(self) -> None:
         self.assertEqual(
-            agent_analysis_command("claude", "prompt"),
-            ["claude", "-p", "--tools", "", "--no-session-persistence", "prompt"],
+            agent_analysis_command("claude"),
+            ["claude", "-p", "--tools", "", "--no-session-persistence"],
         )
         self.assertEqual(
-            agent_analysis_command("codex", "prompt"),
+            agent_analysis_command("codex"),
             [
                 "codex",
                 "exec",
@@ -328,7 +335,7 @@ applies_to: robots
                 "read-only",
                 "--ephemeral",
                 "--skip-git-repo-check",
-                "prompt",
+                "-",
             ],
         )
 
@@ -346,6 +353,7 @@ applies_to: robots
         self.assertEqual(output, "Looks good.")
         self.assertEqual(calls[0][0][0:2], ["claude", "-p"])
         self.assertIn("--tools", calls[0][0])
+        self.assertIn("Selected stanzas:", calls[0][1]["input"])
         self.assertTrue(calls[0][1]["capture_output"])
         self.assertFalse(calls[0][1]["check"])
 
