@@ -1,6 +1,6 @@
 # Fluff-Mods
 
-`Claude + Fluff-Mods` is a multi-agent guidance manager for turning long agent
+`Fluff-Mods` is a multi-agent guidance manager for turning long agent
 behavior directives into simple on/off options. It supports Claude Code, Codex,
 and custom agent guidance files; ships with manicured built-in feeds of
 high-leverage directives; and lets users subscribe to additional feeds from
@@ -219,6 +219,10 @@ If no managed block exists yet, the tool appends one.
 - After applying, prints a short heuristic summary of possible conflicts between
   selected stanzas and suspicious directives that may indicate a compromised
   feed.
+
+## License
+
+GPL-3.0-or-later.
 
 ## Development
 
