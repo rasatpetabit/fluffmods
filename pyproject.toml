@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Fluff-Mods"
+version = "0.1.0"
+description = "Claude + Fluff-Mods: a checkbox-style manager for toggleable Claude Code guidance."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "ras" }
+]
+keywords = ["claude", "claude-code", "configuration", "cli"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development",
+  "Topic :: Utilities",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/rasatpetabit/fluffmods"
+Issues = "https://github.com/rasatpetabit/fluffmods/issues"
+
+[project.scripts]
+fluffmods = "fluffmods.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

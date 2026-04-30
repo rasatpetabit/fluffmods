@@ -1,0 +1,176 @@
+# Fluff-Mods
+
+`Claude + Fluff-Mods` is a small checkbox-style CLI for turning long Claude Code
+behavior directives into simple on/off options. It ships with a small catalog of
+pre-packaged stanzas and can load your own Markdown stanzas from local option
+directories.
+
+It edits one managed block in `~/.claude/CLAUDE.md` and leaves the rest of the
+file alone.
+
+## Install
+
+From GitHub:
+
+```sh
+pipx install git+https://github.com/rasatpetabit/fluffmods.git
+```
+
+Or with `uv`:
+
+```sh
+uv tool install git+https://github.com/rasatpetabit/fluffmods.git
+```
+
+For local development:
+
+```sh
+git clone https://github.com/rasatpetabit/fluffmods.git
+cd fluffmods
+python3 -m pip install -e .
+```
+
+## Use
+
+Open the interactive menu:
+
+```sh
+fluffmods
+```
+
+If you run `fluffmods` inside a project that already has `CLAUDE.md` or
+`.claude/CLAUDE.md`, it asks whether you want to edit that project guidance or
+your global `~/.claude/CLAUDE.md`.
+
+The menu supports arrow-key navigation. Use up/down arrows to move, space to
+toggle an option, `p` to preview, and enter or `a` to apply.
+
+Check current option state:
+
+```sh
+fluffmods --status
+```
+
+Preview the generated Claude guidance block:
+
+```sh
+fluffmods --preview
+```
+
+Enable or disable options non-interactively:
+
+```sh
+fluffmods --enable codex-delegation --apply
+fluffmods --disable codex-delegation --apply
+```
+
+Use a different target file:
+
+```sh
+fluffmods --file ./CLAUDE.md --enable verify-before-complete --apply
+```
+
+Skip the target prompt:
+
+```sh
+fluffmods --project
+fluffmods --global
+```
+
+Load custom stanza files from a directory:
+
+```sh
+fluffmods --options-dir ./my-claude-options --status
+```
+
+## Included Options
+
+- `codex-delegation`: Automatically dispatch simple and well-defined coding tasks to Codex.
+- `verify-before-complete`: Require local verification before claiming implementation work is done.
+- `protect-user-work`: Treat existing uncommitted changes as user-owned.
+- `review-findings-first`: Use findings-first format for code reviews.
+- `plan-complex-work`: Plan before multi-file or ambiguous implementation work.
+- `prefer-project-runbooks`: Prefer project-local runbooks and scripts over generic commands.
+- `concise-final-report`: Keep final reports compact and evidence-backed.
+- `durable-handoff`: Write durable handoff notes for substantive multi-step work.
+- `ask-for-risky-actions`: Ask before destructive, external, or production-visible actions.
+- `exact-scope`: Honor exact file and task scope literally.
+- `output-important-command-results`: Relay important command output instead of just saying commands ran.
+
+## Custom Options
+
+Custom options are Markdown files. Put them in either:
+
+```text
+~/.config/fluffmods/options/
+./.fluffmods/options/
+```
+
+Or point at a directory explicitly:
+
+```sh
+fluffmods --options-dir ./options
+```
+
+The simplest custom option uses the filename as the option id and the first
+Markdown heading as the menu label:
+
+```md
+# Prefer Small Pull Requests
+
+When implementation work grows beyond one clear review unit, split it into
+smaller commits or handoff tasks before continuing.
+```
+
+For stable ids and labels, add front matter:
+
+```md
+---
+id: small-prs
+label: Prefer small pull requests
+---
+
+# Prefer Small Pull Requests
+
+When implementation work grows beyond one clear review unit, split it into
+smaller commits or handoff tasks before continuing.
+```
+
+The intended model is:
+
+- **Bundled stanzas:** useful defaults that ship with Fluff-Mods.
+- **Custom stanzas:** your own reusable `CLAUDE.md` blocks, stored as Markdown
+  files and toggled through the same interface.
+- **Adopted current stanzas:** future work will make it easy to extract existing
+  unmanaged `CLAUDE.md` sections into custom option files.
+
+## How It Works
+
+`fluffmods` owns this block:
+
+```md
+<!-- BEGIN FLUFF-MODS OPTIONS -->
+...
+<!-- END FLUFF-MODS OPTIONS -->
+```
+
+The tool stores enabled option ids in a metadata comment inside that block. On
+apply, it regenerates only the managed block and makes a timestamped backup of
+the target `CLAUDE.md`.
+
+If no managed block exists yet, the tool appends one.
+
+## Safety
+
+- No runtime dependencies.
+- Does not edit `~/.claude/settings.json` or `~/.claude.json`.
+- Creates a backup before writing.
+- Supports `--preview` for dry-run inspection.
+
+## Development
+
+Run tests:
+
+```sh
+python3 -m unittest discover -s tests
+```
