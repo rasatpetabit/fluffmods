@@ -2,6 +2,8 @@
 id: protect-user-work
 label: Treat existing uncommitted changes as user-owned
 applies_to: generic
+version: 1.0.0
+updated_on: 2026-04-30
 ---
 ## User-Owned Worktree Changes
 

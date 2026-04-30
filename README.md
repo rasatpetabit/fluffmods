@@ -2,8 +2,9 @@
 
 `Claude + Fluff-Mods` is a multi-agent guidance manager for turning long agent
 behavior directives into simple on/off options. It supports Claude Code, Codex,
-and custom agent guidance files; ships with manicured built-in feeds; and lets
-users subscribe to additional feeds from their favorite authors.
+and custom agent guidance files; ships with manicured built-in feeds of
+high-leverage directives; and lets users subscribe to additional feeds from
+their favorite authors.
 
 It edits one managed block in the selected guidance file and leaves the rest of
 the file alone. Claude targets use `CLAUDE.md`; Codex targets use `AGENTS.md`.
@@ -51,8 +52,9 @@ Options are tagged as `generic`, `claude`, or `codex`. Generic options are shown
 for both agents; Claude and Codex options are shown only for that selected agent.
 
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
-toggle an option, `d` to delete a custom stanza after confirmation, `p` to
-preview, and enter or `a` to apply.
+toggle an option, `R` to refresh a selected stale stanza, `U` to upgrade all
+enabled stanzas to the latest feed versions, `d` to delete a custom stanza after
+confirmation, `p` to preview, and enter or `a` to apply.
 
 Check current option state:
 
@@ -73,6 +75,7 @@ Enable or disable options non-interactively:
 fluffmods --enable codex-delegation --apply
 fluffmods --disable codex-delegation --apply
 fluffmods --codex --enable exact-scope --apply
+fluffmods --upgrade
 ```
 
 Use a different target file:
@@ -110,11 +113,25 @@ mode, it checks enabled remote feeds in the background when a feed has not been
 refreshed for more than an hour, then tells you whether refresh succeeded or
 failed.
 
+Configure automatic upgrades of existing guidance files to the latest feed
+versions:
+
+```sh
+fluffmods --auto-update-configs status
+fluffmods --auto-update-configs on
+fluffmods --auto-update-configs off
+```
+
+Each feed stanza can include `version` and `updated_on` metadata. Fluff-Mods
+records that metadata in the managed block, compares older installs against the
+current feed body, and marks enabled stanzas with `refresh available` when the
+installed copy differs.
+
 ## Included Options
 
 These ship in the default `RAS list` feed.
 
-- `codex-delegation` (`codex`): Automatically dispatch simple and well-defined coding tasks to Codex.
+- `codex-delegation` (`claude`): Automatically dispatch simple and well-defined coding tasks to Codex.
 - `verify-before-complete` (`generic`): Require local verification before claiming implementation work is done.
 - `protect-user-work` (`generic`): Treat existing uncommitted changes as user-owned.
 - `review-findings-first` (`generic`): Use findings-first format for code reviews.
@@ -199,6 +216,9 @@ If no managed block exists yet, the tool appends one.
 - Does not edit `~/.claude/settings.json` or `~/.claude.json`.
 - Creates a backup before writing.
 - Supports `--preview` for dry-run inspection.
+- After applying, prints a short heuristic summary of possible conflicts between
+  selected stanzas and suspicious directives that may indicate a compromised
+  feed.
 
 ## Development
 

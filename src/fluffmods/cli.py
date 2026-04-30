@@ -21,6 +21,7 @@ from urllib.request import urlopen
 BEGIN = "<!-- BEGIN FLUFF-MODS OPTIONS -->"
 END = "<!-- END FLUFF-MODS OPTIONS -->"
 META_PREFIX = "<!-- fluffmods: enabled="
+META_OPTIONS_PREFIX = "<!-- fluffmods: options="
 AGENTS = ("claude", "codex")
 APPLIES_TO = ("generic", "claude", "codex")
 DEFAULT_RAS_FEED_URL = "https://raw.githubusercontent.com/rasatpetabit/fluffmods/main/feeds/ras-list/feed.json"
@@ -34,6 +35,8 @@ class Option:
     body: str
     applies_to: str = "generic"
     source: str = "bundled"
+    version: str | None = None
+    updated_on: str | None = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +52,11 @@ class FeedRefreshResult:
     refreshed: bool
     failed: bool
     messages: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ConfigSettings:
+    auto_update_configs: bool = False
 
 
 BUILTIN_OPTIONS: tuple[Option, ...] = (
@@ -95,7 +103,7 @@ Acceptance criteria:
 Verification:
 Return:
 ```""",
-        applies_to="codex",
+        applies_to="claude",
     ),
     Option(
         "verify-before-complete",
@@ -185,7 +193,17 @@ def option_applies_to_agent(option: Option, agent: str) -> bool:
 
 
 def options_for_agent(options: tuple[Option, ...], agent: str) -> tuple[Option, ...]:
-    return tuple(option for option in options if option_applies_to_agent(option, agent))
+    filtered = [option for option in options if option_applies_to_agent(option, agent)]
+    return tuple(
+        sorted(
+            filtered,
+            key=lambda option: (
+                0 if option.applies_to == "generic" else 1,
+                option.label.lower(),
+                option.option_id,
+            ),
+        )
+    )
 
 
 def global_guidance_path(agent: str) -> Path:
@@ -236,6 +254,30 @@ def default_feeds() -> list[Feed]:
 
 def feeds_config_path() -> Path:
     return config_dir() / "feeds.json"
+
+
+def settings_path() -> Path:
+    return config_dir() / "settings.json"
+
+
+def load_settings() -> ConfigSettings:
+    path = settings_path()
+    if not path.exists():
+        return ConfigSettings()
+    raw = json.loads(read_text(path))
+    return ConfigSettings(auto_update_configs=bool(raw.get("auto_update_configs", False)))
+
+
+def save_settings(settings: ConfigSettings) -> None:
+    write_text(
+        settings_path(),
+        json.dumps({"auto_update_configs": settings.auto_update_configs}, indent=2) + "\n",
+    )
+
+
+def print_auto_update_status() -> None:
+    state = "on" if load_settings().auto_update_configs else "off"
+    print(f"auto_update_configs: {state}")
 
 
 def load_feed_subscriptions() -> list[Feed]:
@@ -424,6 +466,8 @@ def load_options_from_feed_dir(directory: Path, feed_name: str) -> list[Option]:
                 body=option.body,
                 applies_to=option.applies_to,
                 source=f"feed:{feed_name}",
+                version=option.version or str(manifest.get("version", "")) or None,
+                updated_on=option.updated_on or manifest.get("updated_on"),
             )
         )
     return options
@@ -544,6 +588,8 @@ def parse_custom_option(path: Path) -> Option:
     option_id = slugify_option_id(metadata.get("id", path.stem))
     label = metadata.get("label") or label_from_body(body, fallback_label)
     applies_to = metadata.get("applies_to", "generic").strip().lower()
+    version = metadata.get("version")
+    updated_on = metadata.get("updated_on")
     if applies_to not in APPLIES_TO:
         raise ValueError(
             f"{path} has invalid applies_to {applies_to!r}; expected one of {', '.join(APPLIES_TO)}"
@@ -558,7 +604,13 @@ def parse_custom_option(path: Path) -> Option:
         body=body,
         applies_to=applies_to,
         source=str(path),
+        version=version,
+        updated_on=updated_on,
     )
+
+
+def normalize_body(body: str) -> str:
+    return "\n".join(line.rstrip() for line in body.strip().splitlines())
 
 
 def default_option_dirs() -> list[Path]:
@@ -583,8 +635,12 @@ def load_options(
         for path in sorted(directory.glob("*.md")):
             option = parse_custom_option(path)
             if option.option_id in seen:
+                existing = next(item for item in options if item.option_id == option.option_id)
+                if normalize_body(existing.body) == normalize_body(option.body):
+                    continue
                 raise ValueError(
-                    f"Duplicate option id {option.option_id!r} from {path}; choose a unique id"
+                    f"Duplicate option id {option.option_id!r} from {path}; "
+                    f"it differs from {existing.source}"
                 )
             options.append(option)
             seen.add(option.option_id)
@@ -605,6 +661,30 @@ def parse_enabled(text: str) -> set[str]:
     return set()
 
 
+def parse_installed_option_metadata(text: str) -> dict[str, dict[str, str]]:
+    block = extract_managed_block(text)
+    if not block:
+        return {}
+    match = re.search(r"<!-- fluffmods: options=(.*?) -->", block)
+    if not match:
+        return {}
+    try:
+        raw = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    metadata: dict[str, dict[str, str]] = {}
+    for option_id, values in raw.items():
+        if isinstance(option_id, str) and isinstance(values, dict):
+            metadata[option_id] = {
+                str(key): str(value)
+                for key, value in values.items()
+                if value is not None
+            }
+    return metadata
+
+
 def extract_managed_block(text: str) -> str | None:
     start = text.find(BEGIN)
     end = text.find(END)
@@ -621,11 +701,27 @@ def remove_managed_block(text: str) -> str:
     return pattern.sub("\n", text).strip() + "\n"
 
 
+def option_metadata_for_block(enabled: set[str], options: tuple[Option, ...]) -> dict[str, dict[str, str]]:
+    metadata: dict[str, dict[str, str]] = {}
+    for option in options:
+        if option.option_id not in enabled:
+            continue
+        values = {"source": option.source}
+        if option.version:
+            values["version"] = option.version
+        if option.updated_on:
+            values["updated_on"] = option.updated_on
+        metadata[option.option_id] = values
+    return metadata
+
+
 def render_block(enabled: set[str], options: tuple[Option, ...] = BUILTIN_OPTIONS) -> str:
     ids = [option.option_id for option in options if option.option_id in enabled]
+    metadata = option_metadata_for_block(set(ids), options)
     lines = [
         BEGIN,
         f"{META_PREFIX}{','.join(ids)} -->",
+        f"{META_OPTIONS_PREFIX}{json.dumps(metadata, sort_keys=True, separators=(',', ':'))} -->",
         "",
         "## Managed Claude Behavior Options",
         "",
@@ -662,6 +758,11 @@ def compile_claude_md(
     return text.rstrip() + "\n\n" + block
 
 
+def apply_compiled_config(path: Path, original: str, enabled: set[str], options: tuple[Option, ...]) -> Path | None:
+    compiled = compile_claude_md(original, enabled, options)
+    return write_with_backup(path, compiled)
+
+
 def write_with_backup(path: Path, content: str) -> Path | None:
     path.parent.mkdir(parents=True, exist_ok=True)
     backup: Path | None = None
@@ -673,13 +774,52 @@ def write_with_backup(path: Path, content: str) -> Path | None:
     return backup
 
 
-def print_status(enabled: set[str], options: tuple[Option, ...] = BUILTIN_OPTIONS) -> None:
+def option_needs_refresh(original: str, enabled: set[str], option: Option) -> bool:
+    if option.option_id not in enabled:
+        return False
+
+    block = extract_managed_block(original) or ""
+    metadata = parse_installed_option_metadata(original).get(option.option_id, {})
+    installed_version = metadata.get("version")
+    installed_updated_on = metadata.get("updated_on")
+
+    if option.version and installed_version and option.version != installed_version:
+        return True
+    if option.updated_on and installed_updated_on and option.updated_on != installed_updated_on:
+        return True
+    return normalize_body(option.body) not in normalize_body(block)
+
+
+def refreshable_options(original: str, enabled: set[str], options: tuple[Option, ...]) -> tuple[Option, ...]:
+    return tuple(option for option in options if option_needs_refresh(original, enabled, option))
+
+
+def source_label(option: Option) -> str:
+    if option.source.startswith("feed:"):
+        label = option.source
+        details = []
+        if option.version:
+            details.append(f"v{option.version}")
+        if option.updated_on:
+            details.append(f"updated {option.updated_on}")
+        if details:
+            label += f" {'/'.join(details)}"
+        return label
+    return option.source
+
+
+def print_status(
+    enabled: set[str],
+    options: tuple[Option, ...] = BUILTIN_OPTIONS,
+    original: str = "",
+) -> None:
     for index, option in enumerate(options, start=1):
         mark = "x" if option.option_id in enabled else " "
-        source = option.source if option.source.startswith("feed:") else option.source
+        source = source_label(option)
+        refresh = " refresh available" if option_needs_refresh(original, enabled, option) else ""
         print(
             f"{index:2}. [{mark}] {option.label}  "
-            f"({option.option_id}, {option.applies_to}, {source})"
+            f"({option.option_id}, {option.applies_to}, {source}{refresh})"
         )
 
 
@@ -688,11 +828,12 @@ def print_menu(
     selected_index: int,
     path: Path,
     options: tuple[Option, ...],
+    original: str = "",
     feed_message: str | None = None,
 ) -> None:
     print("\033[2J\033[H", end="")
     print(f"fluffmods: {path}")
-    print("Use ↑/↓ to move, space to toggle, d to delete custom stanzas, enter/a to apply, p to preview, q to quit.")
+    print("Use ↑/↓ to move, space to toggle, R to refresh selected, U to upgrade all, d to delete custom stanzas, enter/a to apply, p to preview, q to quit.")
     print()
 
     if not options:
@@ -701,10 +842,11 @@ def print_menu(
     for index, option in enumerate(options):
         pointer = ">" if index == selected_index else " "
         mark = "x" if option.option_id in enabled else " "
-        source = option.source if option.source.startswith("feed:") else option.source
+        source = source_label(option)
+        refresh = " refresh available" if option_needs_refresh(original, enabled, option) else ""
         print(
             f"{pointer} {index + 1:2}. [{mark}] {option.label}  "
-            f"({option.option_id}, {option.applies_to}, {source})"
+            f"({option.option_id}, {option.applies_to}, {source}{refresh})"
         )
     if feed_message:
         print()
@@ -753,6 +895,113 @@ def normalize_ids(ids: list[str], options: tuple[Option, ...]) -> set[str]:
     return set(ids)
 
 
+def potential_conflicts(enabled: set[str], options: tuple[Option, ...]) -> list[str]:
+    selected = [option for option in options if option.option_id in enabled]
+    conflicts: list[str] = []
+
+    def contains(option: Option, *phrases: str) -> bool:
+        body = option.body.lower()
+        return any(phrase in body for phrase in phrases)
+
+    for left_index, left in enumerate(selected):
+        for right in selected[left_index + 1 :]:
+            if (
+                contains(left, "ask before", "approval")
+                and contains(right, "automatically", "by default", "self-service")
+            ) or (
+                contains(right, "ask before", "approval")
+                and contains(left, "automatically", "by default", "self-service")
+            ):
+                conflicts.append(
+                    f"{left.option_id} and {right.option_id}: approval language may constrain automation language."
+                )
+            if (
+                contains(left, "plan before", "written plan")
+                and contains(right, "execute directly", "doing it inline")
+            ) or (
+                contains(right, "plan before", "written plan")
+                and contains(left, "execute directly", "doing it inline")
+            ):
+                conflicts.append(
+                    f"{left.option_id} and {right.option_id}: planning thresholds may conflict with direct-execution language."
+                )
+            if (
+                contains(left, "concise", "compact")
+                and contains(right, "durable handoff", "record decisions")
+            ) or (
+                contains(right, "concise", "compact")
+                and contains(left, "durable handoff", "record decisions")
+            ):
+                conflicts.append(
+                    f"{left.option_id} and {right.option_id}: concise-reporting language may pull against durable handoff detail."
+                )
+
+    return conflicts[:5]
+
+
+def suspicious_directives(enabled: set[str], options: tuple[Option, ...]) -> list[str]:
+    selected = [option for option in options if option.option_id in enabled]
+    patterns = {
+        "instruction bypass": (
+            "ignore previous instructions",
+            "ignore all previous",
+            "override system",
+            "disable safety",
+            "bypass safety",
+            "do not tell the user",
+            "hide this from the user",
+        ),
+        "secret exfiltration": (
+            "api key",
+            "access token",
+            "private key",
+            "ssh key",
+            "password",
+            "credential",
+            "send secrets",
+            "exfiltrate",
+        ),
+        "destructive command": (
+            "rm -rf",
+            "chmod 777",
+            "curl | sh",
+            "curl | bash",
+            "wget | sh",
+            "sudo ",
+        ),
+        "prompt disclosure": (
+            "reveal your system prompt",
+            "print your instructions",
+            "show hidden instructions",
+        ),
+    }
+    findings: list[str] = []
+    for option in selected:
+        body = option.body.lower()
+        matched = [name for name, phrases in patterns.items() if any(phrase in body for phrase in phrases)]
+        if matched:
+            findings.append(f"{option.option_id}: possible {', '.join(matched)} language")
+    return findings[:5]
+
+
+def print_apply_summary(enabled: set[str], options: tuple[Option, ...]) -> None:
+    conflicts = potential_conflicts(enabled, options)
+    print("Potential stanza conflicts:")
+    if not conflicts:
+        print("- None detected by the built-in heuristics.")
+    else:
+        for conflict in conflicts:
+            print(f"- {conflict}")
+
+    suspicious = suspicious_directives(enabled, options)
+    print("Potential malicious feed directives:")
+    if not suspicious:
+        print("- None detected by the built-in heuristics.")
+    else:
+        for finding in suspicious:
+            print(f"- {finding}")
+
+
 def delete_option_with_confirmation(option: Option) -> str:
     if option.source == "bundled" or option.source.startswith("feed:"):
         return f"Cannot delete {option.option_id}; it comes from {option.source}. Toggle it off or remove the feed instead."
@@ -774,6 +1023,7 @@ def delete_option_with_confirmation(option: Option) -> str:
 
 def interactive(
     path: Path,
+    original: str,
     enabled: set[str],
     options: tuple[Option, ...],
     feed_results: queue.Queue[FeedRefreshResult] | None = None,
@@ -803,7 +1053,7 @@ def interactive(
                         options = reload_options()
                         selected_index = min(selected_index, max(len(options) - 1, 0))
 
-            print_menu(enabled, selected_index, path, options, feed_message)
+            print_menu(enabled, selected_index, path, options, original, feed_message)
             key = read_key()
 
             if key == "q":
@@ -814,10 +1064,23 @@ def interactive(
             if key in {"a", "enter"}:
                 print("\033[2J\033[H", end="")
                 return enabled, options
+            if key in {"u", "U"}:
+                print("\033[2J\033[H", end="")
+                return enabled, options
             if key == "p":
                 print("\033[2J\033[H", end="")
                 print(render_block(enabled, options))
                 input("Press enter to return to the menu...")
+                continue
+            if key in {"r", "R"}:
+                if not options:
+                    continue
+                option = options[selected_index]
+                if option_needs_refresh(original, enabled, option):
+                    enabled.add(option.option_id)
+                    feed_message = f"Will refresh {option.option_id} on apply."
+                else:
+                    feed_message = f"No refresh available for {option.option_id}."
                 continue
             if key in {"up", "k"}:
                 if not options:
@@ -856,20 +1119,38 @@ def interactive(
                     continue
 
     print(f"fluffmods: {path}")
-    print("Toggle options by number. Commands: p=preview, a=apply, d <number>=delete custom stanza, q=quit")
+    print("Toggle options by number. Commands: p=preview, a=apply, r <number>=refresh, u=upgrade all, d <number>=delete custom stanza, q=quit")
 
     while True:
         print()
-        print_status(enabled, options)
+        print_status(enabled, options, original)
         choice = input("\nChoice: ").strip().lower()
 
         if choice in {"q", "quit", "exit"}:
             return None
         if choice in {"a", "apply"}:
             return enabled, options
+        if choice in {"u", "upgrade"}:
+            return enabled, options
         if choice in {"p", "preview"}:
             print()
             print(render_block(enabled, options))
+            continue
+        if choice.startswith("r"):
+            parts = choice.split()
+            if len(parts) != 2 or not parts[1].isdigit():
+                print("Enter r followed by an option number, for example: r 3")
+                continue
+            index = int(parts[1]) - 1
+            if 0 <= index < len(options):
+                option = options[index]
+                if option_needs_refresh(original, enabled, option):
+                    enabled.add(option.option_id)
+                    print(f"Will refresh {option.option_id} on apply.")
+                else:
+                    print(f"No refresh available for {option.option_id}.")
+                continue
+            print("Option number out of range.")
             continue
         if choice.startswith("d"):
             parts = choice.split()
@@ -923,6 +1204,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--status", action="store_true", help="Print current option status")
     parser.add_argument("--preview", action="store_true", help="Print generated managed block")
     parser.add_argument("--apply", action="store_true", help="Apply selected options")
+    parser.add_argument("--upgrade", action="store_true", help="Rewrite enabled feed-backed stanzas with the latest installed feed versions")
     parser.add_argument("--enable", action="append", default=[], help="Enable option id")
     parser.add_argument("--disable", action="append", default=[], help="Disable option id")
     parser.add_argument(
@@ -943,6 +1225,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--feed-name", help="Override the name when adding a feed")
     parser.add_argument("--feed-refresh", action="store_true", help="Refresh subscribed feeds now")
     parser.add_argument("--no-feed-refresh", action="store_true", help="Skip background feed refresh")
+    parser.add_argument(
+        "--auto-update-configs",
+        choices=("on", "off", "status"),
+        help="Configure whether existing guidance files are automatically upgraded to latest feed stanzas",
+    )
     return parser
 
 
@@ -952,6 +1239,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.assume_global and args.assume_project:
         parser.error("--global and --project are mutually exclusive")
     agent = args.agent_override or args.agent
+
+    if args.auto_update_configs:
+        if args.auto_update_configs == "status":
+            print_auto_update_status()
+        else:
+            enabled = args.auto_update_configs == "on"
+            save_settings(ConfigSettings(auto_update_configs=enabled))
+            print(f"auto_update_configs: {'on' if enabled else 'off'}")
+        return 0
 
     if args.feed_list:
         print_feed_subscriptions()
@@ -999,34 +1295,43 @@ def main(argv: list[str] | None = None) -> int:
     enabled.update(normalize_ids(args.enable, options))
     enabled.difference_update(normalize_ids(args.disable, options))
 
+    settings = load_settings()
+    stale_options = refreshable_options(original, enabled, options)
+    if settings.auto_update_configs and stale_options:
+        backup = apply_compiled_config(path, original, enabled, options)
+        print(f"Auto-updated {path} from latest feed stanzas")
+        if backup:
+            print(f"Backup: {backup}")
+        original = read_text(path)
+
     if args.status:
-        print_status(enabled, options)
+        print_status(enabled, options, original)
         return 0
 
     if args.preview:
         print(render_block(enabled, options))
         return 0
 
-    if args.apply:
-        compiled = compile_claude_md(original, enabled, options)
-        backup = write_with_backup(path, compiled)
+    if args.apply or args.upgrade:
+        backup = apply_compiled_config(path, original, enabled, options)
         print(f"Updated {path}")
         if backup:
             print(f"Backup: {backup}")
+        print_apply_summary(enabled, options)
         return 0
 
     feed_results = None if args.no_feed_refresh else start_feed_refresh_thread()
-    selected = interactive(path, enabled, options, feed_results, current_options)
+    selected = interactive(path, original, enabled, options, feed_results, current_options)
     if selected is None:
         print("No changes applied.")
         return 0
 
     selected_enabled, selected_options = selected
-    compiled = compile_claude_md(original, selected_enabled, selected_options)
-    backup = write_with_backup(path, compiled)
+    backup = apply_compiled_config(path, original, selected_enabled, selected_options)
     print(f"Updated {path}")
     if backup:
         print(f"Backup: {backup}")
+    print_apply_summary(selected_enabled, selected_options)
     return 0
 
 
