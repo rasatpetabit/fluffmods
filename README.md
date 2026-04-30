@@ -219,8 +219,8 @@ If no managed block exists yet, the tool appends one.
 - Supports `--preview` for dry-run inspection.
 - After applying, asks the target agent (`claude` for Claude config, `codex` for
   Codex config) to audit the selected stanzas for conflicts and suspicious
-  directives that may indicate a compromised feed, then prints the local
-  heuristic fallback summary.
+  directives that may indicate a compromised feed, using a fast/low-effort
+  analysis mode, then prints the local heuristic fallback summary.
 
 ## License
 

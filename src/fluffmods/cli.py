@@ -1116,9 +1116,11 @@ def agent_analysis_command(agent: str) -> list[str]:
             "read-only",
             "--ephemeral",
             "--skip-git-repo-check",
+            "-c",
+            'model_reasoning_effort="low"',
             "-",
         ]
-    return ["claude", "-p", "--tools", "", "--no-session-persistence"]
+    return ["claude", "-p", "--effort", "low", "--tools", "", "--no-session-persistence"]
 
 
 def run_agent_analysis(

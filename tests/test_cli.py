@@ -325,7 +325,7 @@ applies_to: robots
     def test_agent_analysis_command_matches_target_agent(self) -> None:
         self.assertEqual(
             agent_analysis_command("claude"),
-            ["claude", "-p", "--tools", "", "--no-session-persistence"],
+            ["claude", "-p", "--effort", "low", "--tools", "", "--no-session-persistence"],
         )
         self.assertEqual(
             agent_analysis_command("codex"),
@@ -336,6 +336,8 @@ applies_to: robots
                 "read-only",
                 "--ephemeral",
                 "--skip-git-repo-check",
+                "-c",
+                'model_reasoning_effort="low"',
                 "-",
             ],
         )
@@ -353,6 +355,7 @@ applies_to: robots
 
         self.assertEqual(output, "Looks good.")
         self.assertEqual(calls[0][0][0:2], ["claude", "-p"])
+        self.assertIn("low", calls[0][0])
         self.assertIn("--tools", calls[0][0])
         self.assertIn("Selected stanzas:", calls[0][1]["input"])
         self.assertTrue(calls[0][1]["capture_output"])
