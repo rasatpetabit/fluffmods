@@ -546,14 +546,14 @@ def choose_target_path(
     print(f"Project {agent} guidance detected: {project_path}")
     print(f"Global {agent} guidance:           {global_path}")
     while True:
-        choice = input("Edit project or global guidance? [P/G/Q] ").strip().lower()
-        if choice in {"p", "project"}:
+        choice = input("Edit project/current-directory or global guidance? [P/G/Q, Enter=P] ").strip().lower()
+        if choice in {"p", "project", ""}:
             return project_path
-        if choice in {"g", "global", ""}:
+        if choice in {"g", "global"}:
             return global_path
         if choice in {"q", "quit", "exit"}:
             raise KeyboardInterrupt
-        print("Enter P for project, G for global, or Q to quit.")
+        print("Enter P or press Enter for project/current directory, G for global, or Q to quit.")
 
 
 def slugify_option_id(value: str) -> str:

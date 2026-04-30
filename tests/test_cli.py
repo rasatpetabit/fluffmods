@@ -443,6 +443,36 @@ class TargetSelectionTests(unittest.TestCase):
             Path.home() / ".codex" / "AGENTS.md",
         )
 
+    def test_choose_target_path_enter_defaults_to_project_when_prompted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project_file = root / "CLAUDE.md"
+            project_file.write_text("# Project", encoding="utf-8")
+            nested = root / "subdir"
+            nested.mkdir()
+
+            old_cwd = Path.cwd()
+            try:
+                import os
+
+                os.chdir(nested)
+                with (
+                    patch("sys.stdin.isatty", return_value=True),
+                    patch("builtins.input", return_value=""),
+                    patch("sys.stdout", new_callable=StringIO),
+                ):
+                    self.assertEqual(
+                        choose_target_path(
+                            None,
+                            assume_global=False,
+                            assume_project=False,
+                            agent="claude",
+                        ),
+                        project_file.resolve(),
+                    )
+            finally:
+                os.chdir(old_cwd)
+
 
 if __name__ == "__main__":
     unittest.main()
