@@ -300,18 +300,22 @@ def choose_agent_interactive() -> str:
 
 def target_choices(agents: tuple[str, ...] = AGENTS, start: Path | None = None) -> tuple[TargetChoice, ...]:
     choices: list[TargetChoice] = []
+    global_paths: dict[str, tuple[Path, Path]] = {}
     for agent in agents:
         global_path = global_guidance_path(agent).expanduser()
         try:
             resolved_global = global_path.resolve()
         except OSError:
             resolved_global = global_path
+        global_paths[agent] = (global_path, resolved_global)
 
         for project_path in project_guidance_paths(agent, start):
             if project_path == resolved_global:
                 continue
             choices.append(TargetChoice(agent=agent, location="project", path=project_path))
 
+    for agent in agents:
+        global_path, _ = global_paths[agent]
         location = "global" if global_path.exists() else "global default"
         choices.append(TargetChoice(agent=agent, location=location, path=global_path))
     return tuple(choices)

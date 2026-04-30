@@ -588,8 +588,8 @@ class TargetSelectionTests(unittest.TestCase):
                 [(choice.agent, choice.location, choice.path) for choice in choices],
                 [
                     ("claude", "project", claude_project.resolve()),
-                    ("claude", "global", claude_global),
                     ("codex", "project", codex_project.resolve()),
+                    ("claude", "global", claude_global),
                     ("codex", "global", codex_global),
                 ],
             )
@@ -616,7 +616,7 @@ class TargetSelectionTests(unittest.TestCase):
                 os.chdir(root)
                 with (
                     patch("sys.stdin.isatty", return_value=True),
-                    patch("fluffmods.cli.read_key", side_effect=["down", "down", "enter"]),
+                    patch("fluffmods.cli.read_key", side_effect=["down", "enter"]),
                     patch("sys.stdout", stdout),
                     patch("fluffmods.cli.global_guidance_path", side_effect=fake_global),
                 ):
@@ -636,8 +636,8 @@ class TargetSelectionTests(unittest.TestCase):
         output = stdout.getvalue()
         lines = output.splitlines()
         self.assertIn(f"  Claude project  {claude_project.resolve()}", lines)
-        self.assertIn(f"  Claude global   {claude_global}", lines)
         self.assertIn(f"> Codex project   {codex_project.resolve()}", lines)
+        self.assertIn(f"  Claude global   {claude_global}", lines)
         self.assertIn(f"  Codex global    {codex_global}", lines)
         self.assertNotIn(f"    {claude_project.resolve()}", lines)
         self.assertNotIn("1) Claude", output)
