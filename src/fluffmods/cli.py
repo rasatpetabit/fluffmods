@@ -322,11 +322,15 @@ def print_target_menu(selected_index: int, choices: tuple[TargetChoice, ...]) ->
     print("? Edit which guidance file?")
     print("Use ↑/↓ or ←/→ to move, Enter/Space to select, Q to quit.")
     print()
+    label_width = max(
+        len(f"{'Claude' if choice.agent == 'claude' else 'Codex'} {choice.location}")
+        for choice in choices
+    )
     for index, choice in enumerate(choices):
         pointer = ">" if index == selected_index else " "
         agent_label = "Claude" if choice.agent == "claude" else "Codex"
-        print(f"{pointer} {agent_label} {choice.location}")
-        print(f"    {choice.path}")
+        label = f"{agent_label} {choice.location}"
+        print(f"{pointer} {label:<{label_width}}  {choice.path}")
 
 
 def choose_target_interactive(choices: tuple[TargetChoice, ...]) -> TargetChoice:

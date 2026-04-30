@@ -634,10 +634,12 @@ class TargetSelectionTests(unittest.TestCase):
                 os.chdir(old_cwd)
 
         output = stdout.getvalue()
-        self.assertIn("Claude project", output)
-        self.assertIn(str(claude_global), output)
-        self.assertIn("Codex project", output)
-        self.assertIn(str(codex_global), output)
+        lines = output.splitlines()
+        self.assertIn(f"  Claude project  {claude_project.resolve()}", lines)
+        self.assertIn(f"  Claude global   {claude_global}", lines)
+        self.assertIn(f"> Codex project   {codex_project.resolve()}", lines)
+        self.assertIn(f"  Codex global    {codex_global}", lines)
+        self.assertNotIn(f"    {claude_project.resolve()}", lines)
         self.assertNotIn("1) Claude", output)
 
     def test_choose_target_path_honors_explicit_file(self) -> None:
