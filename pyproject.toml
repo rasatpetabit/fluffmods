@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "Fluff-Mods"
+name = "AI-FluffMods"
 version = "0.1.0"
-description = "Fluff-Mods: multi-agent guidance manager with curated feeds for Claude Code, Codex, and custom agent stanzas."
+description = "AI + FluffMods: multi-agent guidance manager with curated feeds for Claude Code, Codex, and custom agent stanzas."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "GPL-3.0-or-later"
@@ -33,6 +33,7 @@ Homepage = "https://github.com/rasatpetabit/fluffmods"
 Issues = "https://github.com/rasatpetabit/fluffmods/issues"
 
 [project.scripts]
+ai-fluffmods = "fluffmods.cli:main"
 fluffmods = "fluffmods.cli:main"
 
 [tool.setuptools.packages.find]

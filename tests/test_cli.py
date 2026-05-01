@@ -57,6 +57,8 @@ class ConfigCompileTests(unittest.TestCase):
         text = render_block({"codex-delegation", "exact-scope"})
 
         self.assertEqual(parse_enabled(text), {"codex-delegation", "exact-scope"})
+        self.assertIn("AI + FluffMods", text)
+        self.assertIn("ai-fluffmods", text)
 
     def test_render_block_records_option_source_and_version(self) -> None:
         option = Option(
