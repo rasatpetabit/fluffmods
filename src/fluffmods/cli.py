@@ -1524,6 +1524,10 @@ def status_marker(ok: bool) -> str:
     return "❌"
 
 
+def clear_screen() -> None:
+    print("\033[2J\033[H", end="", flush=True)
+
+
 def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]) -> None:
     conflicts = potential_conflicts(enabled, options)
     print("Heuristic potential stanza conflicts:")
@@ -1566,7 +1570,7 @@ def delete_option_with_confirmation(option: Option) -> str:
     if not path.exists():
         return f"Cannot erase {option.option_id}; source file no longer exists: {path}"
 
-    print("\033[2J\033[H", end="")
+    clear_screen()
     print(f"Erase stanza option: {option.label}")
     print(f"File: {path}")
     confirmation = input("Type 'erase' to permanently erase this stanza file: ").strip()
@@ -1578,7 +1582,7 @@ def delete_option_with_confirmation(option: Option) -> str:
 
 
 def print_option_details(option: Option) -> None:
-    print("\033[2J\033[H", end="")
+    clear_screen()
     print(f"{option.label}")
     print(f"ID: {option.option_id}")
     print(f"Applies to: {option.applies_to}")
@@ -1628,18 +1632,18 @@ def interactive(
             key = read_key()
 
             if key == "q":
-                print("\033[2J\033[H", end="")
+                clear_screen()
                 return None
             if key == "escape":
                 continue
             if key in {"a", "enter"}:
-                print("\033[2J\033[H", end="")
+                clear_screen()
                 return enabled, options
             if key in {"u", "U"}:
-                print("\033[2J\033[H", end="")
+                clear_screen()
                 return enabled, options
             if key == "p":
-                print("\033[2J\033[H", end="")
+                clear_screen()
                 print(render_block(enabled, options))
                 input("Press enter to return to the menu...")
                 continue
