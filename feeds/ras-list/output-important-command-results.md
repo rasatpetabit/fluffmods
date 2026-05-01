@@ -1,7 +1,6 @@
 ---
 id: output-important-command-results
 label: Relay important command output instead of just saying commands ran
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-04-30
 ---

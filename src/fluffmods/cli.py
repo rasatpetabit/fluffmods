@@ -28,6 +28,11 @@ META_PREFIX = "<!-- fluffmods: enabled="
 META_OPTIONS_PREFIX = "<!-- fluffmods: options="
 AGENTS = ("claude", "codex")
 APPLIES_TO = ("generic", "claude", "codex")
+APPLIES_TO_ALIASES = {
+    "all-agents": "generic",
+    "claude-only": "claude",
+    "codex-only": "codex",
+}
 DEFAULT_RAS_FEED_URL = "https://raw.githubusercontent.com/rasatpetabit/fluffmods/main/feeds/ras-list/feed.json"
 FEED_REFRESH_INTERVAL_SECONDS = 60 * 60
 
@@ -152,10 +157,10 @@ For multi-file changes, new features, migrations, or ambiguous design work, prod
     ),
     Option(
         "prefer-project-runbooks",
-        "Prefer project-local runbooks and scripts over generic commands",
+        "Prefer project-local runbooks and scripts over ad hoc commands",
         """## Project-Local Tooling First
 
-Before inventing generic commands, look for project-local runbooks, Makefile targets, package scripts, CI definitions, and existing test helpers. Use the repository's established path unless there is a clear reason not to.""",
+Before inventing ad hoc commands, look for project-local runbooks, Makefile targets, package scripts, CI definitions, and existing test helpers. Use the repository's established path unless there is a clear reason not to.""",
     ),
     Option(
         "concise-final-report",
@@ -733,6 +738,16 @@ def load_options_from_feed_dir(directory: Path, feed_name: str) -> list[Option]:
     return options
 
 
+def prefer_cached_feed_option(bundled: Option | None, cached: Option) -> bool:
+    if bundled is None:
+        return True
+    if bundled.updated_on and (not cached.updated_on or cached.updated_on < bundled.updated_on):
+        return False
+    if bundled.version and cached.version and cached.version < bundled.version:
+        return False
+    return True
+
+
 def load_feed_options() -> tuple[Option, ...]:
     options: list[Option] = []
     for feed in load_feed_subscriptions():
@@ -749,7 +764,8 @@ def load_feed_options() -> tuple[Option, ...]:
             cached_options = []
         by_id = {option.option_id: option for option in feed_options}
         for option in cached_options:
-            by_id[option.option_id] = option
+            if prefer_cached_feed_option(by_id.get(option.option_id), option):
+                by_id[option.option_id] = option
         options.extend(by_id.values())
     return tuple(options)
 
@@ -868,11 +884,12 @@ def parse_custom_option(path: Path) -> Option:
     option_id = slugify_option_id(metadata.get("id", path.stem))
     label = metadata.get("label") or label_from_body(body, fallback_label)
     applies_to = metadata.get("applies_to", "generic").strip().lower()
+    applies_to = APPLIES_TO_ALIASES.get(applies_to, applies_to)
     version = metadata.get("version")
     updated_on = metadata.get("updated_on")
     if applies_to not in APPLIES_TO:
         raise ValueError(
-            f"{path} has invalid applies_to {applies_to!r}; expected one of {', '.join(APPLIES_TO)}"
+            f"{path} has invalid applies_to {applies_to!r}; expected claude-only, codex-only, or omit it"
         )
 
     if not body:
@@ -1154,10 +1171,18 @@ def source_label(option: Option) -> str:
     return option.source
 
 
+def applies_to_label(option: Option) -> str:
+    if option.applies_to == "claude":
+        return "claude-only"
+    if option.applies_to == "codex":
+        return "codex-only"
+    return "all agents"
+
+
 def option_detail_label(option: Option, refresh: str = "") -> str:
     details = []
     if option.applies_to != "generic":
-        details.append(f"{option.applies_to}-only")
+        details.append(applies_to_label(option))
     details.append(source_label(option) + refresh)
     return f"({', '.join(details)})"
 
@@ -1377,7 +1402,7 @@ def selected_stanza_text(enabled: set[str], options: tuple[Option, ...]) -> str:
                 [
                     f"Option id: {option.option_id}",
                     f"Label: {option.label}",
-                    f"Applies to: {option.applies_to}",
+                    f"Applies to: {applies_to_label(option)}",
                     f"Source: {option.source}",
                     f"Version: {option.version or 'unknown'}",
                     f"Updated on: {option.updated_on or 'unknown'}",
@@ -1698,7 +1723,7 @@ def print_option_details(option: Option) -> None:
     clear_screen()
     print(f"{option.label}")
     print(f"ID: {option.option_id}")
-    print(f"Applies to: {option.applies_to}")
+    print(f"Applies to: {applies_to_label(option)}")
     print(f"Source: {source_label(option)}")
     print()
     print(option.body.rstrip())

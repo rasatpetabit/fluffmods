@@ -1,7 +1,6 @@
 ---
 id: concise-final-report
 label: Keep final reports compact and evidence-backed
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-04-30
 ---

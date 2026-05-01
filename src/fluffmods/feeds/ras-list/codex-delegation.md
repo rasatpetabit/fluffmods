@@ -1,7 +1,7 @@
 ---
 id: codex-delegation
 label: Automatically dispatch simple and well-defined coding tasks to Codex
-applies_to: claude
+applies_to: claude-only
 version: 1.0.0
 updated_on: 2026-05-01
 ---

@@ -246,6 +246,40 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertEqual(by_id["old-option"].label, "Cached Old")
         self.assertEqual(by_id["new-option"].label, "Bundled New")
 
+    def test_newer_bundled_feed_option_wins_over_stale_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / "cache"
+            bundled = root / "bundled"
+            cache.mkdir()
+            bundled.mkdir()
+            (cache / "feed.json").write_text(
+                '{"options":["prefer-project-runbooks.md"]}\n',
+                encoding="utf-8",
+            )
+            (cache / "prefer-project-runbooks.md").write_text(
+                "---\nid: prefer-project-runbooks\nlabel: Prefer project-local runbooks and scripts over generic commands\nversion: 1.0.0\nupdated_on: 2026-04-30\n---\n# Cached Old\n",
+                encoding="utf-8",
+            )
+            (bundled / "feed.json").write_text(
+                '{"options":["prefer-project-runbooks.md"]}\n',
+                encoding="utf-8",
+            )
+            (bundled / "prefer-project-runbooks.md").write_text(
+                "---\nid: prefer-project-runbooks\nlabel: Prefer project-local runbooks and scripts over ad hoc commands\nversion: 1.0.0\nupdated_on: 2026-05-01\n---\n# Bundled New\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.feed_cache_dir", return_value=cache),
+                patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
+            ):
+                options = load_feed_options()
+
+        self.assertEqual(len(options), 1)
+        self.assertEqual(options[0].label, "Prefer project-local runbooks and scripts over ad hoc commands")
+
     def test_invalid_cached_feed_falls_back_to_bundled_feed(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -320,7 +354,7 @@ class CustomOptionTests(unittest.TestCase):
                 """---
 id: my-custom-option
 label: My Custom Option
-applies_to: claude
+applies_to: claude-only
 ---
 ## My Custom Stanza
 
@@ -429,7 +463,7 @@ applies_to: robots
 
         text = output.getvalue()
         self.assertIn("ID: details", text)
-        self.assertIn("Applies to: claude", text)
+        self.assertIn("Applies to: claude-only", text)
         self.assertIn("Line one.\nLine two.", text)
 
     def test_wait_for_menu_return_prints_blank_line_before_prompt(self) -> None:

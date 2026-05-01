@@ -1,7 +1,6 @@
 ---
 id: verify-before-complete
 label: Require local verification before claiming implementation work is done
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-05-01
 ---

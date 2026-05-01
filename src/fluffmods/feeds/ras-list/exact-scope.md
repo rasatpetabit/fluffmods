@@ -1,7 +1,6 @@
 ---
 id: exact-scope
 label: Honor exact file and task scope literally
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-04-30
 ---

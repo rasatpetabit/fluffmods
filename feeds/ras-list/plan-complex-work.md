@@ -1,7 +1,6 @@
 ---
 id: plan-complex-work
 label: Plan before multi-file or ambiguous implementation work
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-04-30
 ---

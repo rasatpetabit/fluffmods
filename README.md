@@ -1,4 +1,4 @@
-# fluffmods
+# AI + FluffMods
 
 `fluffmods` is a multi-agent guidance manager for turning long agent
 behavior directives into simple on/off options. It supports Claude Code, Codex,
@@ -48,8 +48,9 @@ For Codex, use `--codex` or `--agent codex`. Global Codex guidance targets
 `~/.codex/AGENTS.md`, and project discovery looks for `AGENTS.md` or
 `.codex/AGENTS.md`.
 
-Options are tagged as `generic`, `claude`, or `codex`. Generic options are shown
-for both agents; Claude and Codex options are shown only for that selected agent.
+Options that apply to both agents are shown without a special tag. Agent-specific
+options are tagged as `claude-only` or `codex-only` and are shown only for that
+selected agent.
 
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
 toggle an option, `D` to view the complete stanza, `E` to erase a custom stanza
@@ -132,18 +133,18 @@ installed copy differs.
 
 These ship in the default `RAS list` feed.
 
-- `ask-user-interactively` (`generic`): Ask the user interactively when input is needed.
-- `codex-delegation` (`claude`): Automatically dispatch simple and well-defined coding tasks to Codex.
-- `verify-before-complete` (`generic`): Require local verification before claiming implementation work is done.
-- `protect-user-work` (`generic`): Treat existing uncommitted changes as user-owned.
-- `review-findings-first` (`generic`): Use findings-first format for code reviews.
-- `plan-complex-work` (`generic`): Plan before multi-file or ambiguous implementation work.
-- `prefer-project-runbooks` (`generic`): Prefer project-local runbooks and scripts over generic commands.
-- `concise-final-report` (`generic`): Keep final reports compact and evidence-backed.
-- `durable-handoff` (`generic`): Write durable handoff notes for substantive multi-step work.
-- `ask-for-risky-actions` (`generic`): Ask before destructive, external, or production-visible actions.
-- `exact-scope` (`generic`): Honor exact file and task scope literally.
-- `output-important-command-results` (`generic`): Relay important command output instead of just saying commands ran.
+- `ask-user-interactively`: Ask the user interactively when input is needed.
+- `codex-delegation` (`claude-only`): Automatically dispatch simple and well-defined coding tasks to Codex.
+- `verify-before-complete`: Require local verification before claiming implementation work is done.
+- `protect-user-work`: Treat existing uncommitted changes as user-owned.
+- `review-findings-first`: Use findings-first format for code reviews.
+- `plan-complex-work`: Plan before multi-file or ambiguous implementation work.
+- `prefer-project-runbooks`: Prefer project-local runbooks and scripts over ad hoc commands.
+- `concise-final-report`: Keep final reports compact and evidence-backed.
+- `durable-handoff`: Write durable handoff notes for substantive multi-step work.
+- `ask-for-risky-actions`: Ask before destructive, external, or production-visible actions.
+- `exact-scope`: Honor exact file and task scope literally.
+- `output-important-command-results`: Relay important command output instead of just saying commands ran.
 
 ## Custom Options
 
@@ -176,7 +177,7 @@ For stable ids and labels, add front matter:
 ---
 id: small-prs
 label: Prefer small pull requests
-applies_to: generic
+applies_to: claude-only
 ---
 
 # Prefer Small Pull Requests
@@ -185,8 +186,8 @@ When implementation work grows beyond one clear review unit, split it into
 smaller commits or handoff tasks before continuing.
 ```
 
-`applies_to` may be `generic`, `claude`, or `codex`. If omitted, it defaults to
-`generic`.
+Set `applies_to: claude-only` or `applies_to: codex-only` for an agent-specific
+option. Omit `applies_to` when an option should be available for both agents.
 
 The intended model is:
 
@@ -219,7 +220,7 @@ If no managed block exists yet, the tool appends one.
 - Creates a cache-directory backup before writing, so edited folders are not
   cluttered with `.bak` files.
 - Supports `--preview` for dry-run inspection.
-- After applying, asks the target agent (`claude` for Claude config, `codex` for
+- After applying, asks the target agent (Claude for Claude config, Codex for
   Codex config) to audit the selected stanzas for conflicts and harmful
   directives that may indicate a compromised feed. The local heuristic summary
   prints first, then the target agent runs in a fast/low-effort analysis mode.

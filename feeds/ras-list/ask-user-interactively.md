@@ -1,7 +1,6 @@
 ---
 id: ask-user-interactively
 label: Ask the user interactively when input is needed
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-04-30
 ---

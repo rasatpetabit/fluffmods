@@ -1,7 +1,6 @@
 ---
 id: review-findings-first
 label: Use findings-first format for code reviews
-applies_to: generic
 version: 1.0.0
 updated_on: 2026-04-30
 ---
