@@ -24,6 +24,7 @@ from fluffmods.cli import (
     detect_enabled,
     display_path,
     infer_enabled_from_text,
+    format_agent_analysis,
     global_guidance_path,
     load_options_from_feed_dir,
     load_feed_options,
@@ -479,20 +480,41 @@ applies_to: robots
         prompt = build_agent_analysis_prompt({"audit-me"}, (option,))
 
         self.assertIn("untrusted text to audit", prompt)
-        self.assertIn("Potential conflicts", prompt)
-        self.assertIn("Potential harmful directives", prompt)
-        self.assertIn("do not use Markdown tables", prompt)
-        self.assertIn("❌ Severity 3/5 🟧🟧🟧⬜⬜", prompt)
-        self.assertIn("Stanzas: stanza-one, stanza-two", prompt)
-        self.assertIn("Issue: One short sentence, under 100 characters.", prompt)
-        self.assertIn("Fix: One short sentence, under 100 characters.", prompt)
+        self.assertIn("Return JSON only", prompt)
+        self.assertIn('"potential_conflicts"', prompt)
+        self.assertIn('"potential_harmful_directives"', prompt)
+        self.assertIn('"severity": 3', prompt)
+        self.assertIn('"stanzas": ["stanza-one", "stanza-two"]', prompt)
         self.assertIn("Rate severity from 1 to 5", prompt)
-        self.assertIn("five-symbol emoji bars", prompt)
-        self.assertIn("🟧🟧🟧⬜⬜", prompt)
-        self.assertIn("✅ None detected.", prompt)
-        self.assertIn("Do not use long prose bullets", prompt)
+        self.assertIn("under 100 characters", prompt)
         self.assertNotIn("malicious", prompt.lower())
         self.assertIn("audit-me", prompt)
+
+    def test_agent_analysis_json_renders_terminal_friendly_severity_blocks(self) -> None:
+        output = format_agent_analysis(
+            """
+{
+  "potential_conflicts": [
+    {
+      "severity": 3,
+      "stanzas": ["ask-user-interactively", "codex-delegation"],
+      "issue": "Delegation might be mistaken for a user prompt.",
+      "fix": "Clarify that delegation evaluation is internal."
+    }
+  ],
+  "potential_harmful_directives": [],
+  "overall_recommendation": "Safe to adopt after the wording clarification."
+}
+""".strip()
+        )
+
+        self.assertIn("Potential conflicts:", output)
+        self.assertIn("❌ 🟧🟧🟧⬜⬜ Severity 3/5", output)
+        self.assertIn("Stanzas: ask-user-interactively, codex-delegation", output)
+        self.assertIn("Issue: Delegation might be mistaken for a user prompt.", output)
+        self.assertIn("Fix: Clarify that delegation evaluation is internal.", output)
+        self.assertIn("Potential harmful directives:\n✅ None detected.", output)
+        self.assertIn("Overall recommendation:\nSafe to adopt", output)
 
     def test_agent_analysis_command_matches_target_agent(self) -> None:
         self.assertEqual(

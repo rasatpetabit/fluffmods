@@ -223,8 +223,8 @@ If no managed block exists yet, the tool appends one.
   Codex config) to audit the selected stanzas for conflicts and harmful
   directives that may indicate a compromised feed. The local heuristic summary
   prints first, then the target agent runs in a fast/low-effort analysis mode.
-  The agent report is requested as compact terminal-friendly severity blocks
-  with 1-5 ratings and emoji bars.
+  The agent is asked for structured JSON, which AI + FluffMods renders as
+  compact terminal-friendly severity blocks with 1-5 ratings and emoji bars.
 
 ## License
 
