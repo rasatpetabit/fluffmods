@@ -74,7 +74,7 @@ class ConfigCompileTests(unittest.TestCase):
             "new-option",
             "New Option",
             "# New Option\n\nUse it.",
-            source="feed:RAS list",
+            source="feed:RAS-List",
             version="1.2.0",
             updated_on="2026-04-30",
         )
@@ -82,13 +82,13 @@ class ConfigCompileTests(unittest.TestCase):
         text = render_block({"new-option"}, (option,))
         metadata = parse_installed_option_metadata(text)
 
-        self.assertEqual(metadata["new-option"]["source"], "feed:RAS list")
+        self.assertEqual(metadata["new-option"]["source"], "feed:RAS-List")
         self.assertEqual(metadata["new-option"]["version"], "1.2.0")
         self.assertEqual(metadata["new-option"]["updated_on"], "2026-04-30")
 
     def test_option_needs_refresh_when_installed_version_is_old(self) -> None:
-        old_option = Option("refresh-me", "Refresh Me", "# Refresh Me\n\nOld", source="feed:RAS list", version="1.0.0")
-        new_option = Option("refresh-me", "Refresh Me", "# Refresh Me\n\nNew", source="feed:RAS list", version="1.1.0")
+        old_option = Option("refresh-me", "Refresh Me", "# Refresh Me\n\nOld", source="feed:RAS-List", version="1.0.0")
+        new_option = Option("refresh-me", "Refresh Me", "# Refresh Me\n\nNew", source="feed:RAS-List", version="1.1.0")
         original = render_block({"refresh-me"}, (old_option,))
 
         self.assertTrue(option_needs_refresh(original, {"refresh-me"}, new_option))
@@ -203,7 +203,7 @@ class ConfigCompileTests(unittest.TestCase):
 
     def test_ask_user_directly_is_in_default_feed(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
-        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        all_options = load_options_from_feed_dir(feed_dir, "RAS-List")
         option = next(item for item in all_options if item.option_id == "ask-user-directly")
 
         self.assertEqual(option.applies_to, "generic")
@@ -214,7 +214,7 @@ class ConfigCompileTests(unittest.TestCase):
 
     def test_build_with_subagents_is_in_default_feed(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
-        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        all_options = load_options_from_feed_dir(feed_dir, "RAS-List")
         option = next(item for item in all_options if item.option_id == "build-with-subagents")
 
         self.assertEqual(option.applies_to, "generic")
@@ -226,7 +226,7 @@ class ConfigCompileTests(unittest.TestCase):
 
     def test_context_discipline_is_in_default_feed(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
-        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        all_options = load_options_from_feed_dir(feed_dir, "RAS-List")
         option = next(item for item in all_options if item.option_id == "context-discipline")
 
         self.assertEqual(option.applies_to, "generic")
@@ -238,7 +238,7 @@ class ConfigCompileTests(unittest.TestCase):
 
     def test_feed_stanza_precedence_and_verification_safety_wording(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
-        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        all_options = load_options_from_feed_dir(feed_dir, "RAS-List")
         by_id = {option.option_id: option for option in all_options}
 
         codex_delegation = by_id["codex-delegation"]
@@ -281,7 +281,7 @@ class ConfigCompileTests(unittest.TestCase):
             )
 
             with (
-                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS-List")]),
                 patch("fluffmods.cli.feed_cache_dir", return_value=cache),
                 patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
             ):
@@ -316,7 +316,7 @@ class ConfigCompileTests(unittest.TestCase):
             )
 
             with (
-                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS-List")]),
                 patch("fluffmods.cli.feed_cache_dir", return_value=cache),
                 patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
             ):
@@ -355,7 +355,7 @@ class ConfigCompileTests(unittest.TestCase):
             )
 
             with (
-                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS-List")]),
                 patch("fluffmods.cli.feed_cache_dir", return_value=cache),
                 patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
             ):
@@ -390,7 +390,7 @@ class ConfigCompileTests(unittest.TestCase):
             )
 
             with (
-                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS-List")]),
                 patch("fluffmods.cli.feed_cache_dir", return_value=cache),
                 patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
             ):
@@ -424,7 +424,7 @@ class ConfigCompileTests(unittest.TestCase):
             )
 
             with (
-                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS-List")]),
                 patch("fluffmods.cli.feed_cache_dir", return_value=cache),
                 patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
             ):
@@ -515,7 +515,7 @@ Do the extra thing.
 
             matches = [option for option in options if option.option_id == "exact-scope"]
             self.assertEqual(len(matches), 1)
-            self.assertEqual(matches[0].source, "feed:RAS list")
+            self.assertEqual(matches[0].source, "feed:RAS-List")
 
     def test_custom_option_defaults_to_generic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -562,7 +562,7 @@ applies_to: robots
             self.assertFalse(path.exists())
 
     def test_delete_feed_option_is_rejected(self) -> None:
-        option = Option("feed-option", "Feed Option", "# Feed", source="feed:RAS list")
+        option = Option("feed-option", "Feed Option", "# Feed", source="feed:RAS-List")
 
         message = delete_option_with_confirmation(option)
 
@@ -574,7 +574,7 @@ applies_to: robots
             "Details",
             "# Details\n\nLine one.\nLine two.",
             applies_to="claude",
-            source="feed:RAS list",
+            source="feed:RAS-List",
             version="1.0.0",
         )
         with patch("sys.stdout", new_callable=StringIO) as output:
@@ -624,7 +624,7 @@ applies_to: robots
 
     def test_potential_conflicts_does_not_flag_reconciled_ras_list_pairs(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
-        options = load_options_from_feed_dir(feed_dir, "RAS list")
+        options = load_options_from_feed_dir(feed_dir, "RAS-List")
         enabled = {
             "ask-for-risky-actions",
             "codex-delegation",
@@ -639,30 +639,30 @@ applies_to: robots
 
     def test_status_prints_short_name_first_and_omits_generic_tag(self) -> None:
         options = (
-            Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS list"),
-            Option("codex-only", "Codex-only behavior", "# Codex", applies_to="codex", source="feed:RAS list"),
+            Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS-List"),
+            Option("codex-only", "Codex-only behavior", "# Codex", applies_to="codex", source="feed:RAS-List"),
         )
 
         with patch("sys.stdout", new_callable=StringIO) as output:
             print_status({"exact-scope"}, options)
 
         text = output.getvalue()
-        self.assertIn("[x] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
+        self.assertIn("[x] exact-scope - Honor exact file and task scope literally  (feed:RAS-List)", text)
         self.assertNotIn("generic", text)
-        self.assertIn("[ ] codex-only - Codex-only behavior  (codex-only, feed:RAS list)", text)
+        self.assertIn("[ ] codex-only - Codex-only behavior  (codex-only, feed:RAS-List)", text)
 
     def test_menu_prints_short_name_first_and_omits_generic_tag(self) -> None:
         options = (
-            Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS list"),
-            Option("claude-only", "Claude-only behavior", "# Claude", applies_to="claude", source="feed:RAS list"),
+            Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS-List"),
+            Option("claude-only", "Claude-only behavior", "# Claude", applies_to="claude", source="feed:RAS-List"),
         )
 
         with patch("sys.stdout", new_callable=StringIO) as output:
             print_menu(set(), 1, Path("/tmp/CLAUDE.md"), options)
 
         text = output.getvalue()
-        self.assertIn("  1. [ ] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
-        self.assertIn(">  2. [ ] claude-only - Claude-only behavior  (claude-only, feed:RAS list)", text)
+        self.assertIn("  1. [ ] exact-scope - Honor exact file and task scope literally  (feed:RAS-List)", text)
+        self.assertIn(">  2. [ ] claude-only - Claude-only behavior  (claude-only, feed:RAS-List)", text)
         self.assertIn("R to refresh feeds", text)
         self.assertIn("U to refresh + upgrade", text)
         self.assertNotIn("generic", text)
@@ -860,7 +860,7 @@ class InteractiveMenuTests(unittest.TestCase):
 
         def fake_refresh(force: bool = False) -> FeedRefreshResult:
             refresh_forces.append(force)
-            return FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",))
+            return FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS-List",))
 
         with (
             patch("sys.stdin.isatty", return_value=True),
@@ -878,7 +878,7 @@ class InteractiveMenuTests(unittest.TestCase):
 
         self.assertEqual(refresh_forces, [True])
         self.assertEqual(selected, (set(), (new_option,)))
-        self.assertIn("Refreshed feed: RAS list", stdout.getvalue())
+        self.assertIn("Refreshed feed: RAS-List", stdout.getvalue())
 
     def test_interactive_upgrade_key_refreshes_before_returning_options(self) -> None:
         stdout = StringIO()
@@ -892,7 +892,7 @@ class InteractiveMenuTests(unittest.TestCase):
             patch("fluffmods.cli.read_key", return_value="u"),
             patch(
                 "fluffmods.cli.refresh_due_feeds",
-                return_value=FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",)),
+                return_value=FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS-List",)),
             ) as refresh_mock,
         ):
             selected = interactive(
@@ -916,7 +916,7 @@ class InteractiveMenuTests(unittest.TestCase):
             patch("builtins.input", side_effect=["r", "a"]),
             patch(
                 "fluffmods.cli.refresh_due_feeds",
-                return_value=FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",)),
+                return_value=FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS-List",)),
             ) as refresh_mock,
         ):
             selected = interactive(
@@ -929,7 +929,7 @@ class InteractiveMenuTests(unittest.TestCase):
 
         refresh_mock.assert_called_once_with(force=True)
         self.assertEqual(selected, (set(), (new_option,)))
-        self.assertIn("Refreshed feed: RAS list", output.getvalue())
+        self.assertIn("Refreshed feed: RAS-List", output.getvalue())
 
 
 class SelfUpgradeTests(unittest.TestCase):
@@ -1134,7 +1134,7 @@ class TargetSelectionTests(unittest.TestCase):
 
             def fake_refresh(force: bool = False) -> FeedRefreshResult:
                 refresh_forces.append(force)
-                return FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",))
+                return FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS-List",))
 
             def fake_load_options(*args, **kwargs):
                 nonlocal load_calls

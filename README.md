@@ -8,11 +8,11 @@ their favorite authors.
 
 It edits one managed block in the selected guidance file and leaves the rest of
 the file alone. Claude targets use `CLAUDE.md`; Codex targets use `AGENTS.md`.
-The default feed is `RAS list`, which is enabled natively.
+The default feed is `RAS-List`, which is enabled natively.
 
-## Bundled RAS List Rules
+## Bundled RAS-List Rules
 
-The default RAS List feed ships with these rules:
+The default RAS-List feed ships with these rules:
 
 - `ask-user-directly`: Ask short, concrete questions with clear options when user input is genuinely needed.
 - `context-discipline`: Keep large ongoing work focused by using targeted reads, concise summaries, bounded subagents, and durable handoff notes when context gets high.
@@ -159,7 +159,7 @@ installed copy differs.
 
 ## Included Options
 
-These ship in the default `RAS list` feed.
+These ship in the default `RAS-List` feed.
 
 - `ask-user-directly`: Ask the user directly when input is needed.
 - `context-discipline`: Keep context usage disciplined in large ongoing work.

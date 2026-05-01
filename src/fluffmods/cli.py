@@ -523,7 +523,7 @@ def bundled_feed_dir(feed_id: str) -> Path | None:
 
 
 def default_feeds() -> list[Feed]:
-    return [Feed(feed_id="ras-list", name="RAS list", url=DEFAULT_RAS_FEED_URL)]
+    return [Feed(feed_id="ras-list", name="RAS-List", url=DEFAULT_RAS_FEED_URL)]
 
 
 def feeds_config_path() -> Path:
