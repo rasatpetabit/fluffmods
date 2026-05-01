@@ -764,6 +764,8 @@ def load_feed_options() -> tuple[Option, ...]:
             cached_options = []
         by_id = {option.option_id: option for option in feed_options}
         for option in cached_options:
+            if feed_options and option.option_id not in by_id:
+                continue
             if prefer_cached_feed_option(by_id.get(option.option_id), option):
                 by_id[option.option_id] = option
         options.extend(by_id.values())

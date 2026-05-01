@@ -181,15 +181,16 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertIn("codex-delegation", claude_ids)
         self.assertNotIn("codex-delegation", codex_ids)
 
-    def test_ask_user_interactively_is_in_default_feed(self) -> None:
+    def test_ask_user_directly_is_in_default_feed(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
         all_options = load_options_from_feed_dir(feed_dir, "RAS list")
-        option = next(item for item in all_options if item.option_id == "ask-user-interactively")
+        option = next(item for item in all_options if item.option_id == "ask-user-directly")
 
         self.assertEqual(option.applies_to, "generic")
-        self.assertEqual(option.label, "Ask the user interactively when input is needed")
+        self.assertEqual(option.label, "Ask the user directly when input is needed")
+        self.assertEqual(option.updated_on, "2026-05-01")
         self.assertIn("Prefer a short question with 2-4 concrete options.", option.body)
-        self.assertIn("two sentences or less", option.body)
+        self.assertIn("three sentences or less", option.body)
 
     def test_feed_stanza_precedence_and_verification_safety_wording(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
@@ -245,6 +246,41 @@ class ConfigCompileTests(unittest.TestCase):
         by_id = {option.option_id: option for option in options}
         self.assertEqual(by_id["old-option"].label, "Cached Old")
         self.assertEqual(by_id["new-option"].label, "Bundled New")
+
+    def test_bundled_feed_manifest_removes_stale_cached_option(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / "cache"
+            bundled = root / "bundled"
+            cache.mkdir()
+            bundled.mkdir()
+            (cache / "feed.json").write_text(
+                '{"options":["ask-user-interactively.md"]}\n',
+                encoding="utf-8",
+            )
+            (cache / "ask-user-interactively.md").write_text(
+                "---\nid: ask-user-interactively\nlabel: Ask the user interactively when input is needed\nupdated_on: 2026-04-30\n---\n# Old\n",
+                encoding="utf-8",
+            )
+            (bundled / "feed.json").write_text(
+                '{"options":["ask-user-directly.md"]}\n',
+                encoding="utf-8",
+            )
+            (bundled / "ask-user-directly.md").write_text(
+                "---\nid: ask-user-directly\nlabel: Ask the user directly when input is needed\nupdated_on: 2026-05-01\n---\n# New\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.feed_cache_dir", return_value=cache),
+                patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
+            ):
+                options = load_feed_options()
+
+        by_id = {option.option_id: option for option in options}
+        self.assertNotIn("ask-user-interactively", by_id)
+        self.assertEqual(by_id["ask-user-directly"].label, "Ask the user directly when input is needed")
 
     def test_newer_bundled_feed_option_wins_over_stale_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -570,7 +606,7 @@ applies_to: robots
   "potential_conflicts": [
     {
       "severity": 3,
-      "stanzas": ["ask-user-interactively", "codex-delegation"],
+      "stanzas": ["ask-user-directly", "codex-delegation"],
       "issue": "Delegation might be mistaken for a user prompt.",
       "fix": "Clarify that delegation evaluation is internal."
     }
@@ -585,7 +621,7 @@ applies_to: robots
         self.assertNotIn("Potential harmful directives:", output)
         self.assertIn("🟧🟧🟧⬜⬜ Potential conflict, severity 3/5", output)
         self.assertNotIn("❌ 🟧🟧🟧⬜⬜ Potential conflict", output)
-        self.assertIn("Stanzas: ask-user-interactively, codex-delegation", output)
+        self.assertIn("Stanzas: ask-user-directly, codex-delegation", output)
         self.assertIn("Issue: Delegation might be mistaken for a user prompt.", output)
         self.assertIn("Fix: Clarify that delegation evaluation is internal.", output)
         self.assertIn("\n\n✅ No potential harmful directives detected.", output)
