@@ -738,13 +738,15 @@ def load_feed_options() -> tuple[Option, ...]:
         if not feed.enabled:
             continue
 
+        bundled_path = bundled_feed_dir(feed.feed_id)
+        feed_options = load_options_from_feed_dir(bundled_path, feed.name) if bundled_path else []
+
         cache_path = feed_cache_dir(feed)
-        feed_options = load_options_from_feed_dir(cache_path, feed.name)
-        if not feed_options:
-            bundled_path = bundled_feed_dir(feed.feed_id)
-            if bundled_path:
-                feed_options = load_options_from_feed_dir(bundled_path, feed.name)
-        options.extend(feed_options)
+        cached_options = load_options_from_feed_dir(cache_path, feed.name)
+        by_id = {option.option_id: option for option in feed_options}
+        for option in cached_options:
+            by_id[option.option_id] = option
+        options.extend(by_id.values())
     return tuple(options)
 
 

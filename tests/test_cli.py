@@ -10,6 +10,7 @@ from unittest.mock import patch
 from fluffmods.cli import (
     BEGIN,
     END,
+    Feed,
     Option,
     agent_analysis_command,
     backup_dir_for,
@@ -25,6 +26,7 @@ from fluffmods.cli import (
     infer_enabled_from_text,
     global_guidance_path,
     load_options_from_feed_dir,
+    load_feed_options,
     load_options,
     main,
     nearest_project_guidance_path,
@@ -181,6 +183,45 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertEqual(option.label, "Ask the user interactively when input is needed")
         self.assertIn("Prefer a short question with 2-4 concrete options.", option.body)
         self.assertIn("two sentences or less", option.body)
+
+    def test_default_bundled_feed_additions_are_visible_when_cache_is_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / "cache"
+            bundled = root / "bundled"
+            cache.mkdir()
+            bundled.mkdir()
+            (cache / "feed.json").write_text(
+                '{"options":["old.md"]}\n',
+                encoding="utf-8",
+            )
+            (cache / "old.md").write_text(
+                "---\nid: old-option\nlabel: Cached Old\n---\n# Cached Old\n",
+                encoding="utf-8",
+            )
+            (bundled / "feed.json").write_text(
+                '{"options":["old.md","new.md"]}\n',
+                encoding="utf-8",
+            )
+            (bundled / "old.md").write_text(
+                "---\nid: old-option\nlabel: Bundled Old\n---\n# Bundled Old\n",
+                encoding="utf-8",
+            )
+            (bundled / "new.md").write_text(
+                "---\nid: new-option\nlabel: Bundled New\n---\n# Bundled New\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.feed_cache_dir", return_value=cache),
+                patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
+            ):
+                options = load_feed_options()
+
+        by_id = {option.option_id: option for option in options}
+        self.assertEqual(by_id["old-option"].label, "Cached Old")
+        self.assertEqual(by_id["new-option"].label, "Bundled New")
 
     def test_options_sort_generic_before_agent_specific_then_alphabetically(self) -> None:
         options = (
