@@ -13,6 +13,7 @@ from fluffmods.cli import (
     Feed,
     Option,
     agent_analysis_command,
+    agent_error_summary,
     backup_dir_for,
     build_agent_analysis_prompt,
     choose_agent,
@@ -60,6 +61,8 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertEqual(parse_enabled(text), {"codex-delegation", "exact-scope"})
         self.assertIn("AI + FluffMods", text)
         self.assertIn("ai-fluffmods", text)
+        self.assertIn("## Managed AI Agent Behavior Options", text)
+        self.assertNotIn("## Managed Claude Behavior Options", text)
 
     def test_render_block_records_option_source_and_version(self) -> None:
         option = Option(
@@ -560,6 +563,25 @@ applies_to: robots
                 "-",
             ],
         )
+
+    def test_agent_error_summary_keeps_codex_failures_concise(self) -> None:
+        detail = "\n".join(
+            [
+                "OpenAI Codex v0.125.0 (research preview)",
+                "user",
+                "Review these AI + FluffMods configuration stanzas before they are trusted",
+                "ERROR: Reconnecting... 5/5",
+                "ERROR: stream disconnected before completion: error sending request for url (https://api.openai.com/v1/responses)",
+            ]
+        )
+
+        summary = agent_error_summary(["codex", "exec"], detail, 1)
+
+        self.assertEqual(
+            summary,
+            "ERROR: stream disconnected before completion: error sending request for url...",
+        )
+        self.assertNotIn("Review these AI + FluffMods", summary)
 
     def test_run_agent_analysis_uses_target_agent_runner(self) -> None:
         calls = []
