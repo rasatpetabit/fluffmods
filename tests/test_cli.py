@@ -243,6 +243,11 @@ class ConfigCompileTests(unittest.TestCase):
 
         self.assertNotIn("codex-delegation", by_id)
 
+        plan = by_id["plan-complex-work"]
+        self.assertEqual(plan.updated_on, "2026-05-01")
+        self.assertIn("follow `ask-user-directly`", plan.body)
+        self.assertIn("2-4 concrete alternative approaches", plan.body)
+
         verify = by_id["verify-before-complete"]
         self.assertEqual(verify.updated_on, "2026-05-01")
         self.assertIn("must not modify unrelated dirty files", verify.body)

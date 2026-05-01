@@ -19,7 +19,7 @@ The default RAS-List feed ships with these rules:
 - `verify-before-complete`: Run the most relevant safe local verification before claiming implementation work is done, or report exactly why verification could not run.
 - `protect-user-work`: Treat existing uncommitted changes as user-owned and avoid reverting, overwriting, or cleaning up unrelated work.
 - `review-findings-first`: Lead code reviews with severity-ordered findings grounded in file paths and line numbers, keeping summaries secondary.
-- `plan-complex-work`: Write a short execution plan before multi-file, ambiguous, migratory, or new-feature work.
+- `plan-complex-work`: Write a short execution plan before complex work and offer concrete alternative approaches when unresolved choices require user input.
 - `build-with-subagents`: Parallelize independent implementation work with subagents while keeping blocking critical-path work in the main thread.
 - `prefer-project-runbooks`: Prefer project-local runbooks, scripts, Makefile targets, package scripts, CI definitions, and test helpers over ad hoc commands.
 - `concise-final-report`: Keep final reports compact and evidence-backed, covering what changed, what was verified, and any residual risk.
