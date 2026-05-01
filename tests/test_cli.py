@@ -11,6 +11,7 @@ from fluffmods.cli import (
     BEGIN,
     END,
     Feed,
+    FeedRefreshResult,
     Option,
     agent_analysis_command,
     agent_error_summary,
@@ -934,6 +935,98 @@ class TargetSelectionTests(unittest.TestCase):
             self.assertEqual(main([]), 0)
 
         self.assertEqual(events, ["refresh", "choose"])
+
+    def test_main_refreshes_due_feeds_for_noninteractive_commands_before_loading_options(self) -> None:
+        events = []
+        option = Option("exact-scope", "Exact Scope", "# Exact Scope")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            path.write_text("# Config\n", encoding="utf-8")
+
+            def fake_refresh(force: bool = False) -> FeedRefreshResult:
+                events.append("refresh")
+                return FeedRefreshResult(refreshed=False, failed=False, messages=())
+
+            def fake_load_options(*args, **kwargs):
+                events.append("load")
+                return (option,)
+
+            with (
+                patch("fluffmods.cli.refresh_due_feeds", side_effect=fake_refresh),
+                patch("fluffmods.cli.load_options", side_effect=fake_load_options),
+                patch("sys.stdout", new_callable=StringIO),
+            ):
+                self.assertEqual(main(["--agent", "claude", "--file", str(path), "--status"]), 0)
+
+        self.assertEqual(events, ["refresh", "load"])
+
+    def test_main_forces_feed_refresh_and_reloads_when_requested_option_is_unknown(self) -> None:
+        old_option = Option("exact-scope", "Exact Scope", "# Exact Scope")
+        new_option = Option("context-discipline", "Context Discipline", "# Context Discipline\n\nUse it.")
+        load_calls = 0
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            path.write_text("# Config\n", encoding="utf-8")
+            refresh_forces = []
+
+            def fake_refresh(force: bool = False) -> FeedRefreshResult:
+                refresh_forces.append(force)
+                return FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",))
+
+            def fake_load_options(*args, **kwargs):
+                nonlocal load_calls
+                load_calls += 1
+                if load_calls == 1:
+                    return (old_option,)
+                return (old_option, new_option)
+
+            with (
+                patch("fluffmods.cli.refresh_due_feeds", side_effect=fake_refresh),
+                patch("fluffmods.cli.load_options", side_effect=fake_load_options),
+                patch("sys.stdout", new_callable=StringIO) as output,
+                patch("sys.stderr", new_callable=StringIO),
+            ):
+                self.assertEqual(
+                    main(["--agent", "claude", "--file", str(path), "--enable", "context-discipline", "--preview"]),
+                    0,
+                )
+
+        self.assertEqual(load_calls, 2)
+        self.assertEqual(refresh_forces, [False, True])
+        self.assertIn("# Context Discipline", output.getvalue())
+
+    def test_no_feed_refresh_preserves_unknown_option_failure(self) -> None:
+        option = Option("exact-scope", "Exact Scope", "# Exact Scope")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            path.write_text("# Config\n", encoding="utf-8")
+
+            with (
+                patch("fluffmods.cli.refresh_due_feeds") as refresh_mock,
+                patch("fluffmods.cli.load_options", return_value=(option,)),
+                patch("sys.stdout", new_callable=StringIO),
+                patch("sys.stderr", new_callable=StringIO) as stderr,
+            ):
+                with self.assertRaises(SystemExit) as raised:
+                    main(
+                        [
+                            "--agent",
+                            "claude",
+                            "--file",
+                            str(path),
+                            "--enable",
+                            "context-discipline",
+                            "--preview",
+                            "--no-feed-refresh",
+                        ]
+                    )
+
+        self.assertEqual(raised.exception.code, 2)
+        refresh_mock.assert_not_called()
+        self.assertIn("Unknown option id(s): context-discipline", stderr.getvalue())
 
     def test_nearest_project_guidance_path_finds_claude_parent_file(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

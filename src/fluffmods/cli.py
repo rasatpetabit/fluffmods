@@ -706,6 +706,12 @@ def refresh_due_feeds(force: bool = False) -> FeedRefreshResult:
     return FeedRefreshResult(refreshed=refreshed, failed=failed, messages=tuple(messages))
 
 
+def print_feed_refresh_messages(result: FeedRefreshResult, *, stream=None) -> None:
+    target = stream or sys.stdout
+    for message in result.messages:
+        print(message, file=target)
+
+
 def start_feed_refresh_thread(force: bool = False) -> queue.Queue[FeedRefreshResult] | None:
     if not force and not any(
         feed.enabled and feed_refresh_due(feed) for feed in load_feed_subscriptions()
@@ -1310,12 +1316,16 @@ def read_key() -> str:
 
 
 def normalize_ids(ids: list[str], options: tuple[Option, ...]) -> set[str]:
-    valid = option_map(options)
-    unknown = [item for item in ids if item not in valid]
+    unknown = unknown_option_ids(ids, options)
     if unknown:
         print(f"Unknown option id(s): {', '.join(unknown)}", file=sys.stderr)
         sys.exit(2)
     return set(ids)
+
+
+def unknown_option_ids(ids: list[str], options: tuple[Option, ...]) -> list[str]:
+    valid = option_map(options)
+    return [item for item in ids if item not in valid]
 
 
 def potential_conflicts(enabled: set[str], options: tuple[Option, ...]) -> list[str]:
@@ -2016,8 +2026,7 @@ def main(argv: list[str] | None = None) -> int:
         return finish(1)
     if args.feed_refresh:
         result = refresh_due_feeds(force=True)
-        for message in result.messages:
-            print(message)
+        print_feed_refresh_messages(result)
         if result.failed:
             return finish(1)
         if not result.messages:
@@ -2028,6 +2037,10 @@ def main(argv: list[str] | None = None) -> int:
     feed_results = None
     if interactive_mode and not args.no_feed_refresh:
         feed_results = start_feed_refresh_thread()
+    elif not args.no_feed_refresh:
+        result = refresh_due_feeds()
+        if result.messages:
+            print_feed_refresh_messages(result, stream=sys.stderr)
 
     try:
         agent, path = choose_guidance_target(
@@ -2050,6 +2063,15 @@ def main(argv: list[str] | None = None) -> int:
     original = read_text(path)
     options = current_options()
     enabled = detect_enabled(path, original, options)
+
+    requested_ids = args.enable + args.disable
+    if requested_ids and unknown_option_ids(requested_ids, options) and not args.no_feed_refresh:
+        result = refresh_due_feeds(force=True)
+        if result.messages:
+            print_feed_refresh_messages(result, stream=sys.stderr)
+        if result.refreshed:
+            options = current_options()
+            enabled = detect_enabled(path, original, options)
 
     enabled.update(normalize_ids(args.enable, options))
     enabled.difference_update(normalize_ids(args.disable, options))

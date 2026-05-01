@@ -113,7 +113,9 @@ fluffmods --feed-refresh
 fluffmods loads the currently installed feed cache immediately. In interactive
 mode, it checks enabled remote feeds in the background when a feed has not been
 refreshed for more than an hour, then tells you whether refresh succeeded or
-failed.
+failed. Non-interactive commands refresh due feeds synchronously before loading
+options. If an `--enable` or `--disable` id is unknown, fluffmods forces one feed
+refresh and retries before reporting the id as unknown.
 
 Configure automatic upgrades of existing guidance files to the latest feed
 versions:
