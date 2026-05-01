@@ -53,9 +53,9 @@ for both agents; Claude and Codex options are shown only for that selected agent
 
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
 toggle an option, `D` to view the complete stanza, `E` to erase a custom stanza
-after confirmation, `R` to refresh a selected stale stanza, `U` to upgrade all
-enabled stanzas to the latest feed versions, `P` to preview, `Q` to quit, and
-enter or `A` to apply. Uppercase and lowercase commands are both accepted.
+after confirmation, `U` to upgrade all enabled stanzas to the latest feed
+versions, `P` to preview, `Q` to quit, and enter or `A` to apply. Uppercase and
+lowercase commands are both accepted.
 
 Check current option state:
 
@@ -220,7 +220,7 @@ If no managed block exists yet, the tool appends one.
   cluttered with `.bak` files.
 - Supports `--preview` for dry-run inspection.
 - After applying, asks the target agent (`claude` for Claude config, `codex` for
-  Codex config) to audit the selected stanzas for conflicts and suspicious
+  Codex config) to audit the selected stanzas for conflicts and harmful
   directives that may indicate a compromised feed, using a fast/low-effort
   analysis mode, then prints the local heuristic fallback summary.
 
