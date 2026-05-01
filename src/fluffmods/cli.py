@@ -1415,6 +1415,8 @@ def agent_analysis_command(agent: str) -> list[str]:
         return [
             "codex",
             "exec",
+            "--model",
+            "gpt-5.4-mini",
             "--sandbox",
             "read-only",
             "--ephemeral",
@@ -1423,7 +1425,7 @@ def agent_analysis_command(agent: str) -> list[str]:
             'model_reasoning_effort="low"',
             "-",
         ]
-    return ["claude", "-p", "--effort", "low", "--tools", "", "--no-session-persistence"]
+    return ["claude", "-p", "--model", "haiku", "--effort", "low", "--tools", "", "--no-session-persistence"]
 
 
 def run_agent_analysis(
@@ -1553,18 +1555,18 @@ def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]
 
 def print_apply_summary(agent: str, enabled: set[str], options: tuple[Option, ...]) -> None:
     print()
+    print_heuristic_apply_summary(enabled, options)
+    print()
     if sys.stdin.isatty() and sys.stdout.isatty():
-        print(f"AI agent analysis ({agent}; this can take a moment, or hit Q to quit):")
+        print(f"AI agent analysis ({agent}; fast model, this can take a moment, or hit Q to quit):", flush=True)
     else:
-        print(f"AI agent analysis ({agent}):")
+        print(f"AI agent analysis ({agent}; fast model):", flush=True)
     try:
         analysis = run_agent_analysis_with_quit(agent, enabled, options)
         print(f"{status_marker(True)} AI agent analysis completed.")
         print(analysis)
     except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
         print(f"{status_marker(False)} Could not run {agent} analysis: {exc}")
-    print()
-    print_heuristic_apply_summary(enabled, options)
 
 
 def delete_option_with_confirmation(option: Option) -> str:

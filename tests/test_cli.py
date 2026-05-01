@@ -497,13 +497,15 @@ applies_to: robots
     def test_agent_analysis_command_matches_target_agent(self) -> None:
         self.assertEqual(
             agent_analysis_command("claude"),
-            ["claude", "-p", "--effort", "low", "--tools", "", "--no-session-persistence"],
+            ["claude", "-p", "--model", "haiku", "--effort", "low", "--tools", "", "--no-session-persistence"],
         )
         self.assertEqual(
             agent_analysis_command("codex"),
             [
                 "codex",
                 "exec",
+                "--model",
+                "gpt-5.4-mini",
                 "--sandbox",
                 "read-only",
                 "--ephemeral",
@@ -527,6 +529,7 @@ applies_to: robots
 
         self.assertEqual(output, "Looks good.")
         self.assertEqual(calls[0][0][0:2], ["claude", "-p"])
+        self.assertIn("haiku", calls[0][0])
         self.assertIn("low", calls[0][0])
         self.assertIn("--tools", calls[0][0])
         self.assertIn("Selected stanzas:", calls[0][1]["input"])
@@ -545,8 +548,9 @@ applies_to: robots
             print_apply_summary("claude", set(), tuple())
 
         text = stdout.getvalue()
-        self.assertTrue(text.startswith("\nAI agent analysis"))
-        self.assertIn("AI agent analysis (claude; this can take a moment, or hit Q to quit):", text)
+        self.assertTrue(text.startswith("\nHeuristic potential stanza conflicts"))
+        self.assertLess(text.index("Heuristic potential stanza conflicts:"), text.index("AI agent analysis"))
+        self.assertIn("AI agent analysis (claude; fast model, this can take a moment, or hit Q to quit):", text)
         self.assertIn("✅ AI agent analysis completed.", text)
         self.assertIn("Heuristic potential stanza conflicts:\n✅ None detected by the built-in heuristics.", text)
         self.assertIn("Heuristic potential harmful feed directives:\n✅ None detected by the built-in heuristics.", text)
