@@ -743,7 +743,10 @@ def load_feed_options() -> tuple[Option, ...]:
         feed_options = load_options_from_feed_dir(bundled_path, feed.name) if bundled_path else []
 
         cache_path = feed_cache_dir(feed)
-        cached_options = load_options_from_feed_dir(cache_path, feed.name)
+        try:
+            cached_options = load_options_from_feed_dir(cache_path, feed.name)
+        except (OSError, ValueError, json.JSONDecodeError):
+            cached_options = []
         by_id = {option.option_id: option for option in feed_options}
         for option in cached_options:
             by_id[option.option_id] = option

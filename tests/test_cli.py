@@ -246,6 +246,41 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertEqual(by_id["old-option"].label, "Cached Old")
         self.assertEqual(by_id["new-option"].label, "Bundled New")
 
+    def test_invalid_cached_feed_falls_back_to_bundled_feed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / "cache"
+            bundled = root / "bundled"
+            cache.mkdir()
+            bundled.mkdir()
+            (cache / "feed.json").write_text(
+                '{"options":["concise-final-report.md"]}\n',
+                encoding="utf-8",
+            )
+            (cache / "concise-final-report.md").write_text(
+                "---\nid: concise-final-report\nlabel: Broken Cache\n---\n",
+                encoding="utf-8",
+            )
+            (bundled / "feed.json").write_text(
+                '{"options":["concise-final-report.md"]}\n',
+                encoding="utf-8",
+            )
+            (bundled / "concise-final-report.md").write_text(
+                "---\nid: concise-final-report\nlabel: Bundled Good\n---\n# Bundled Good\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.feed_cache_dir", return_value=cache),
+                patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
+            ):
+                options = load_feed_options()
+
+        self.assertEqual(len(options), 1)
+        self.assertEqual(options[0].option_id, "concise-final-report")
+        self.assertEqual(options[0].label, "Bundled Good")
+
     def test_options_sort_generic_before_agent_specific_then_alphabetically(self) -> None:
         options = (
             Option("z-agent", "Z Agent", "# Z", applies_to="claude"),
