@@ -508,13 +508,36 @@ applies_to: robots
 """.strip()
         )
 
-        self.assertIn("Potential conflicts:", output)
-        self.assertIn("❌ 🟧🟧🟧⬜⬜ Severity 3/5", output)
+        self.assertNotIn("Potential conflicts:", output)
+        self.assertNotIn("Potential harmful directives:", output)
+        self.assertIn("❌ 🟧🟧🟧⬜⬜ Potential conflict, severity 3/5", output)
         self.assertIn("Stanzas: ask-user-interactively, codex-delegation", output)
         self.assertIn("Issue: Delegation might be mistaken for a user prompt.", output)
         self.assertIn("Fix: Clarify that delegation evaluation is internal.", output)
-        self.assertIn("Potential harmful directives:\n✅ None detected.", output)
-        self.assertIn("Overall recommendation:\nSafe to adopt", output)
+        self.assertIn("✅ No potential harmful directives detected.", output)
+        self.assertIn("Overall recommendation: Safe to adopt", output)
+
+    def test_agent_analysis_json_renders_clean_none_rows(self) -> None:
+        output = format_agent_analysis(
+            """
+{
+  "potential_conflicts": [],
+  "potential_harmful_directives": [],
+  "overall_recommendation": "Safe to adopt."
+}
+""".strip()
+        )
+
+        self.assertEqual(
+            output,
+            "\n".join(
+                [
+                    "✅ No potential conflicts detected.",
+                    "✅ No potential harmful directives detected.",
+                    "Overall recommendation: Safe to adopt.",
+                ]
+            ),
+        )
 
     def test_agent_analysis_command_matches_target_agent(self) -> None:
         self.assertEqual(

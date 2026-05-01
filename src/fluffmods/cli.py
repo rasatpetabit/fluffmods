@@ -1509,10 +1509,10 @@ def compact_text(value: object, width: int = 100) -> str:
     return textwrap.shorten(text, width=width, placeholder="...")
 
 
-def render_agent_findings(title: str, findings: object) -> list[str]:
-    lines = [f"{title}:"]
+def render_agent_findings(singular: str, plural: str, findings: object) -> list[str]:
+    lines: list[str] = []
     if not isinstance(findings, list) or not findings:
-        lines.append(f"{status_marker(True)} None detected.")
+        lines.append(f"{status_marker(True)} No {plural} detected.")
         return lines
 
     for index, finding in enumerate(findings):
@@ -1525,7 +1525,7 @@ def render_agent_findings(title: str, findings: object) -> list[str]:
             stanza_text = ", ".join(compact_text(stanza, 40) for stanza in stanzas if str(stanza).strip())
         else:
             stanza_text = compact_text(stanzas, 80)
-        lines.append(f"{status_marker(False)} {SEVERITY_BARS[severity]} Severity {severity}/5")
+        lines.append(f"{status_marker(False)} {SEVERITY_BARS[severity]} {singular}, severity {severity}/5")
         lines.append(f"   Stanzas: {stanza_text or 'unknown'}")
         lines.append(f"   Issue: {compact_text(item.get('issue'))}")
         lines.append(f"   Fix: {compact_text(item.get('fix'))}")
@@ -1538,12 +1538,11 @@ def format_agent_analysis(output: str) -> str:
         return output
 
     lines: list[str] = []
-    lines.extend(render_agent_findings("Potential conflicts", data.get("potential_conflicts")))
-    lines.append("")
-    lines.extend(render_agent_findings("Potential harmful directives", data.get("potential_harmful_directives")))
-    lines.append("")
-    lines.append("Overall recommendation:")
-    lines.append(compact_text(data.get("overall_recommendation"), 180))
+    lines.extend(render_agent_findings("Potential conflict", "potential conflicts", data.get("potential_conflicts")))
+    lines.extend(render_agent_findings("Potential harmful directive", "potential harmful directives", data.get("potential_harmful_directives")))
+    recommendation = compact_text(data.get("overall_recommendation"), 180)
+    if recommendation != "None provided.":
+        lines.append(f"Overall recommendation: {recommendation}")
     return "\n".join(lines)
 
 
