@@ -10,6 +10,25 @@ It edits one managed block in the selected guidance file and leaves the rest of
 the file alone. Claude targets use `CLAUDE.md`; Codex targets use `AGENTS.md`.
 The default feed is `RAS list`, which is enabled natively.
 
+## Bundled RAS List Rules
+
+The default RAS List feed ships with these rules:
+
+- `ask-user-directly`: Ask short, concrete questions with clear options when user input is genuinely needed.
+- `context-discipline`: Keep large ongoing work focused by using targeted reads, concise summaries, bounded subagents, and durable handoff notes when context gets high.
+- `codex-delegation`: For Claude-only workflows, delegate small, well-scoped, locally verifiable coding tasks to Codex while Claude keeps orchestration and review.
+- `verify-before-complete`: Run the most relevant safe local verification before claiming implementation work is done, or report exactly why verification could not run.
+- `protect-user-work`: Treat existing uncommitted changes as user-owned and avoid reverting, overwriting, or cleaning up unrelated work.
+- `review-findings-first`: Lead code reviews with severity-ordered findings grounded in file paths and line numbers, keeping summaries secondary.
+- `plan-complex-work`: Write a short execution plan before multi-file, ambiguous, migratory, or new-feature work.
+- `build-with-subagents`: Parallelize independent implementation work with subagents while keeping blocking critical-path work in the main thread.
+- `prefer-project-runbooks`: Prefer project-local runbooks, scripts, Makefile targets, package scripts, CI definitions, and test helpers over ad hoc commands.
+- `concise-final-report`: Keep final reports compact and evidence-backed, covering what changed, what was verified, and any residual risk.
+- `durable-handoff`: Preserve decisions and next steps in an existing repo handoff surface for substantive multi-step work.
+- `ask-for-risky-actions`: Ask before destructive operations, production-visible changes, force pushes, broad permission changes, external messages, or secret-backed actions.
+- `exact-scope`: Honor exact file lists, numbered tasks, and "only edit" boundaries literally without broadening the task.
+- `output-important-command-results`: Relay important command output or concrete summaries instead of assuming the user can see terminal output.
+
 ## Install
 
 From GitHub:
