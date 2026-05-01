@@ -1252,8 +1252,31 @@ def potential_conflicts(enabled: set[str], options: tuple[Option, ...]) -> list[
         body = option.body.lower()
         return any(phrase in body for phrase in phrases)
 
+    def references(option: Option, other: Option, *phrases: str) -> bool:
+        body = option.body.lower()
+        return other.option_id.lower() in body and any(phrase in body for phrase in phrases)
+
+    def has_explicit_priority(left: Option, right: Option) -> bool:
+        priority_phrases = ("takes precedence", "defer to", "overrides")
+        return references(left, right, *priority_phrases) or references(right, left, *priority_phrases)
+
+    def has_disjoint_planning_threshold(left: Option, right: Option) -> bool:
+        combined = f"{left.body}\n{right.body}".lower()
+        return (
+            ("multi-file" in combined or "ambiguous" in combined)
+            and ("small, well-defined" in combined or "self-contained" in combined)
+        )
+
+    def has_compact_handoff_language(left: Option, right: Option) -> bool:
+        combined = f"{left.body}\n{right.body}".lower()
+        return ("compact" in combined or "concise" in combined) and (
+            "not a verbose transcript" in combined or "not verbose" in combined
+        )
+
     for left_index, left in enumerate(selected):
         for right in selected[left_index + 1 :]:
+            if has_explicit_priority(left, right):
+                continue
             if (
                 contains(left, "ask before", "approval")
                 and contains(right, "automatically", "by default", "self-service")
@@ -1271,9 +1294,10 @@ def potential_conflicts(enabled: set[str], options: tuple[Option, ...]) -> list[
                 contains(right, "plan before", "written plan")
                 and contains(left, "execute directly", "doing it inline")
             ):
-                conflicts.append(
-                    f"{left.option_id} and {right.option_id}: planning thresholds may conflict with direct-execution language."
-                )
+                if not has_disjoint_planning_threshold(left, right):
+                    conflicts.append(
+                        f"{left.option_id} and {right.option_id}: planning thresholds may conflict with direct-execution language."
+                    )
             if (
                 contains(left, "concise", "compact")
                 and contains(right, "durable handoff", "record decisions")
@@ -1281,9 +1305,10 @@ def potential_conflicts(enabled: set[str], options: tuple[Option, ...]) -> list[
                 contains(right, "concise", "compact")
                 and contains(left, "durable handoff", "record decisions")
             ):
-                conflicts.append(
-                    f"{left.option_id} and {right.option_id}: concise-reporting language may pull against durable handoff detail."
-                )
+                if not has_compact_handoff_language(left, right):
+                    conflicts.append(
+                        f"{left.option_id} and {right.option_id}: concise-reporting language may pull against durable handoff detail."
+                    )
 
     return conflicts[:5]
 
@@ -1501,20 +1526,20 @@ def status_marker(ok: bool) -> str:
 
 def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]) -> None:
     conflicts = potential_conflicts(enabled, options)
-    print(f"{status_marker(not conflicts)} Heuristic potential stanza conflicts:")
+    print("Heuristic potential stanza conflicts:")
     if not conflicts:
-        print("- None detected by the built-in heuristics.")
+        print(f"{status_marker(True)} None detected by the built-in heuristics.")
     else:
         for conflict in conflicts:
-            print(f"- {conflict}")
+            print(f"{status_marker(False)} {conflict}")
 
     suspicious = suspicious_directives(enabled, options)
-    print(f"{status_marker(not suspicious)} Heuristic potential harmful feed directives:")
+    print("Heuristic potential harmful feed directives:")
     if not suspicious:
-        print("- None detected by the built-in heuristics.")
+        print(f"{status_marker(True)} None detected by the built-in heuristics.")
     else:
         for finding in suspicious:
-            print(f"- {finding}")
+            print(f"{status_marker(False)} {finding}")
 
 
 def print_apply_summary(agent: str, enabled: set[str], options: tuple[Option, ...]) -> None:

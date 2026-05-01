@@ -429,6 +429,21 @@ applies_to: robots
 
         self.assertTrue(conflicts)
 
+    def test_potential_conflicts_does_not_flag_reconciled_ras_list_pairs(self) -> None:
+        feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
+        options = load_options_from_feed_dir(feed_dir, "RAS list")
+        enabled = {
+            "ask-for-risky-actions",
+            "codex-delegation",
+            "concise-final-report",
+            "durable-handoff",
+            "plan-complex-work",
+        }
+
+        conflicts = potential_conflicts(enabled, options)
+
+        self.assertEqual(conflicts, [])
+
     def test_status_prints_short_name_first_and_omits_generic_tag(self) -> None:
         options = (
             Option("exact-scope", "Honor exact file and task scope literally", "# Exact", source="feed:RAS list"),
@@ -528,8 +543,8 @@ applies_to: robots
         self.assertTrue(text.startswith("\nAI agent analysis"))
         self.assertIn("AI agent analysis (claude; this can take a moment, or hit Q to quit):", text)
         self.assertIn("✅ AI agent analysis completed.", text)
-        self.assertIn("✅ Heuristic potential stanza conflicts:", text)
-        self.assertIn("✅ Heuristic potential harmful feed directives:", text)
+        self.assertIn("Heuristic potential stanza conflicts:\n✅ None detected by the built-in heuristics.", text)
+        self.assertIn("Heuristic potential harmful feed directives:\n✅ None detected by the built-in heuristics.", text)
         self.assertIn("Looks good.", text)
 
     def test_apply_summary_marks_heuristic_issues_with_red_x(self) -> None:
@@ -542,7 +557,7 @@ applies_to: robots
             print_apply_summary("claude", {"bad-feed"}, (option,))
 
         text = output.getvalue()
-        self.assertIn("❌ Heuristic potential harmful feed directives:", text)
+        self.assertIn("Heuristic potential harmful feed directives:\n❌ bad-feed:", text)
         self.assertNotIn("malicious", text.lower())
 
     def test_apply_summary_marks_agent_analysis_failure_with_red_x(self) -> None:
