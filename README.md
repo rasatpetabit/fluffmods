@@ -139,6 +139,7 @@ These ship in the default `RAS list` feed.
 - `protect-user-work`: Treat existing uncommitted changes as user-owned.
 - `review-findings-first`: Use findings-first format for code reviews.
 - `plan-complex-work`: Plan before multi-file or ambiguous implementation work.
+- `build-with-subagents`: Build with subagents while keeping the critical path local.
 - `prefer-project-runbooks`: Prefer project-local runbooks and scripts over ad hoc commands.
 - `concise-final-report`: Keep final reports compact and evidence-backed.
 - `durable-handoff`: Write durable handoff notes for substantive multi-step work.

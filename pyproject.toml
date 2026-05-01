@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fluffmods"
-version = "0.1.1"
+version = "0.1.2"
 description = "fluffmods: multi-agent guidance manager with curated feeds for Claude Code, Codex, and custom agent stanzas."
 readme = "README.md"
 requires-python = ">=3.10"

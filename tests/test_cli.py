@@ -131,6 +131,22 @@ class ConfigCompileTests(unittest.TestCase):
 
             self.assertEqual(enabled, {"recovered"})
 
+    def test_detect_enabled_recovers_from_legacy_cache_backup_subdir(self) -> None:
+        option = Option("recovered", "Recovered", "# Recovered\n\nUse this behavior.")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "CLAUDE.md"
+            cache = Path(tmp) / "cache"
+            with patch("fluffmods.cli.cache_dir", return_value=cache):
+                path.write_text(render_block(set(), (option,)), encoding="utf-8")
+                backup_dir = backup_dir_for(path) / "claude-md-legacyhash"
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                backup = backup_dir / "CLAUDE.md.fluffmods-20260430-000001.bak"
+                backup.write_text(render_block({"recovered"}, (option,)), encoding="utf-8")
+
+                enabled = detect_enabled(path, path.read_text(encoding="utf-8"), (option,))
+
+            self.assertEqual(enabled, {"recovered"})
+
     def test_recover_enabled_from_backups_ignores_ids_not_in_current_options(self) -> None:
         option = Option("current", "Current", "# Current")
         with tempfile.TemporaryDirectory() as tmp:
@@ -191,6 +207,18 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertEqual(option.updated_on, "2026-05-01")
         self.assertIn("Prefer a short question with 2-4 concrete options.", option.body)
         self.assertIn("three sentences or less", option.body)
+
+    def test_build_with_subagents_is_in_default_feed(self) -> None:
+        feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
+        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        option = next(item for item in all_options if item.option_id == "build-with-subagents")
+
+        self.assertEqual(option.applies_to, "generic")
+        self.assertEqual(option.label, "Build with subagents while keeping the critical path local")
+        self.assertEqual(option.updated_on, "2026-05-01")
+        self.assertIn("parallelize independent steps", option.body)
+        self.assertIn("do not delegate blocking work", option.body)
+        self.assertIn("critical path moving locally", option.body)
 
     def test_feed_stanza_precedence_and_verification_safety_wording(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
@@ -281,6 +309,45 @@ class ConfigCompileTests(unittest.TestCase):
         by_id = {option.option_id: option for option in options}
         self.assertNotIn("ask-user-interactively", by_id)
         self.assertEqual(by_id["ask-user-directly"].label, "Ask the user directly when input is needed")
+
+    def test_newer_cached_feed_manifest_can_add_option_not_in_bundled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cache = root / "cache"
+            bundled = root / "bundled"
+            cache.mkdir()
+            bundled.mkdir()
+            (bundled / "feed.json").write_text(
+                '{"updated_on":"2026-04-30","options":["old.md"]}\n',
+                encoding="utf-8",
+            )
+            (bundled / "old.md").write_text(
+                "---\nid: old-option\nlabel: Bundled Old\n---\n# Bundled Old\n",
+                encoding="utf-8",
+            )
+            (cache / "feed.json").write_text(
+                '{"updated_on":"2026-05-01","options":["old.md","new.md"]}\n',
+                encoding="utf-8",
+            )
+            (cache / "old.md").write_text(
+                "---\nid: old-option\nlabel: Cached Old\n---\n# Cached Old\n",
+                encoding="utf-8",
+            )
+            (cache / "new.md").write_text(
+                "---\nid: new-option\nlabel: Cached New\n---\n# Cached New\n",
+                encoding="utf-8",
+            )
+
+            with (
+                patch("fluffmods.cli.load_feed_subscriptions", return_value=[Feed("ras-list", "RAS list")]),
+                patch("fluffmods.cli.feed_cache_dir", return_value=cache),
+                patch("fluffmods.cli.bundled_feed_dir", return_value=bundled),
+            ):
+                options = load_feed_options()
+
+        by_id = {option.option_id: option for option in options}
+        self.assertEqual(by_id["old-option"].label, "Cached Old")
+        self.assertEqual(by_id["new-option"].label, "Cached New")
 
     def test_newer_bundled_feed_option_wins_over_stale_cache(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -377,7 +444,7 @@ class WriteTests(unittest.TestCase):
             self.assertIsNotNone(backup)
             assert backup is not None
             self.assertNotEqual(backup.parent, path.parent)
-            self.assertTrue(str(backup).startswith(str(cache / "backups")))
+            self.assertEqual(backup.parent, cache / "backups")
             self.assertEqual(path.read_text(encoding="utf-8"), "new")
             self.assertEqual(backup.read_text(encoding="utf-8"), "old")
 

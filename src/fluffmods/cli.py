@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import queue
 import re
@@ -489,15 +488,23 @@ def cache_dir() -> Path:
 
 
 def backup_dir_for(path: Path) -> Path:
-    resolved = str(path.expanduser().resolve())
-    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]
+    return cache_dir() / "backups"
+
+
+def legacy_backup_dirs_for(path: Path) -> list[Path]:
     safe_name = slugify_option_id(path.name)
-    return cache_dir() / "backups" / f"{safe_name}-{digest}"
+    return [
+        item
+        for item in backup_dir_for(path).glob(f"{safe_name}-*")
+        if item.is_dir()
+    ]
 
 
 def backup_paths_for(path: Path) -> list[Path]:
     pattern = f"{path.name}.fluffmods-*.bak"
     paths = list(backup_dir_for(path).glob(pattern))
+    for backup_dir in legacy_backup_dirs_for(path):
+        paths.extend(backup_dir.glob(pattern))
     paths.extend(path.parent.glob(pattern))
     return sorted(paths, key=lambda item: item.name, reverse=True)
 
@@ -716,11 +723,10 @@ def start_feed_refresh_thread(force: bool = False) -> queue.Queue[FeedRefreshRes
 
 
 def load_options_from_feed_dir(directory: Path, feed_name: str) -> list[Option]:
-    manifest_path = directory / "feed.json"
-    if not manifest_path.exists():
+    manifest = load_feed_manifest(directory)
+    if not manifest:
         return []
 
-    manifest = json.loads(read_text(manifest_path))
     options: list[Option] = []
     for option_file in manifest.get("options", []):
         option = parse_custom_option(directory / option_file)
@@ -736,6 +742,30 @@ def load_options_from_feed_dir(directory: Path, feed_name: str) -> list[Option]:
             )
         )
     return options
+
+
+def load_feed_manifest(directory: Path) -> dict:
+    manifest_path = directory / "feed.json"
+    if not manifest_path.exists():
+        return {}
+    return json.loads(read_text(manifest_path))
+
+
+def version_key(value: object) -> tuple[int, ...]:
+    parts = str(value or "").split(".")
+    key: list[int] = []
+    for part in parts:
+        if part:
+            key.append(int(part) if part.isdigit() else 0)
+    return tuple(key)
+
+
+def feed_manifest_is_newer(candidate: dict, baseline: dict) -> bool:
+    candidate_updated = str(candidate.get("updated_on") or "")
+    baseline_updated = str(baseline.get("updated_on") or "")
+    if candidate_updated != baseline_updated:
+        return candidate_updated > baseline_updated
+    return version_key(candidate.get("version")) > version_key(baseline.get("version"))
 
 
 def prefer_cached_feed_option(bundled: Option | None, cached: Option) -> bool:
@@ -755,14 +785,22 @@ def load_feed_options() -> tuple[Option, ...]:
             continue
 
         bundled_path = bundled_feed_dir(feed.feed_id)
+        bundled_manifest = load_feed_manifest(bundled_path) if bundled_path else {}
         feed_options = load_options_from_feed_dir(bundled_path, feed.name) if bundled_path else []
 
         cache_path = feed_cache_dir(feed)
         try:
+            cached_manifest = load_feed_manifest(cache_path)
             cached_options = load_options_from_feed_dir(cache_path, feed.name)
         except (OSError, ValueError, json.JSONDecodeError):
+            cached_manifest = {}
             cached_options = []
-        by_id = {option.option_id: option for option in feed_options}
+
+        if cached_options and feed_manifest_is_newer(cached_manifest, bundled_manifest):
+            by_id = {option.option_id: option for option in cached_options}
+        else:
+            by_id = {option.option_id: option for option in feed_options}
+
         for option in cached_options:
             if feed_options and option.option_id not in by_id:
                 continue
