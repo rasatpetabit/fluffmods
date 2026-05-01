@@ -1536,18 +1536,17 @@ def clear_screen() -> None:
 
 
 def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]) -> None:
+    print("Heuristic analysis:")
     conflicts = potential_conflicts(enabled, options)
-    print("Heuristic potential stanza conflicts:")
     if not conflicts:
-        print(f"{status_marker(True)} None detected by the built-in heuristics.")
+        print(f"{status_marker(True)} No potential stanza conflicts detected.")
     else:
         for conflict in conflicts:
             print(f"{status_marker(False)} {conflict}")
 
     suspicious = suspicious_directives(enabled, options)
-    print("Heuristic potential harmful feed directives:")
     if not suspicious:
-        print(f"{status_marker(True)} None detected by the built-in heuristics.")
+        print(f"{status_marker(True)} No potential harmful feed directives detected.")
     else:
         for finding in suspicious:
             print(f"{status_marker(False)} {finding}")

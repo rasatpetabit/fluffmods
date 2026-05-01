@@ -548,12 +548,12 @@ applies_to: robots
             print_apply_summary("claude", set(), tuple())
 
         text = stdout.getvalue()
-        self.assertTrue(text.startswith("\nHeuristic potential stanza conflicts"))
-        self.assertLess(text.index("Heuristic potential stanza conflicts:"), text.index("AI agent analysis"))
+        self.assertTrue(text.startswith("\nHeuristic analysis:"))
+        self.assertLess(text.index("Heuristic analysis:"), text.index("AI agent analysis"))
         self.assertIn("AI agent analysis (claude; fast model, this can take a moment, or hit Q to quit):", text)
         self.assertIn("✅ AI agent analysis completed.", text)
-        self.assertIn("Heuristic potential stanza conflicts:\n✅ None detected by the built-in heuristics.", text)
-        self.assertIn("Heuristic potential harmful feed directives:\n✅ None detected by the built-in heuristics.", text)
+        self.assertIn("✅ No potential stanza conflicts detected.", text)
+        self.assertIn("✅ No potential harmful feed directives detected.", text)
         self.assertIn("Looks good.", text)
 
     def test_apply_summary_marks_heuristic_issues_with_red_x(self) -> None:
@@ -566,7 +566,8 @@ applies_to: robots
             print_apply_summary("claude", {"bad-feed"}, (option,))
 
         text = output.getvalue()
-        self.assertIn("Heuristic potential harmful feed directives:\n❌ bad-feed:", text)
+        self.assertIn("Heuristic analysis:", text)
+        self.assertIn("❌ bad-feed:", text)
         self.assertNotIn("malicious", text.lower())
 
     def test_apply_summary_marks_agent_analysis_failure_with_red_x(self) -> None:
