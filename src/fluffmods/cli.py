@@ -256,7 +256,7 @@ def agent_guidance_location(agent: str) -> str:
 
 def print_agent_menu(selected_index: int) -> None:
     choices = (("claude", "Claude"), ("codex", "Codex"))
-    print("\033[2J\033[H", end="")
+    clear_screen()
     print("? Edit which agent guidance?")
     print("Use ↑/↓ or ←/→ to move, Enter/Space to select, Q to quit.")
     print()
@@ -274,10 +274,10 @@ def choose_agent_interactive() -> str:
         print_agent_menu(selected_index)
         key = read_key()
         if key in {"q", "escape"}:
-            print("\033[2J\033[H", end="")
+            clear_screen()
             raise KeyboardInterrupt
         if key in {"enter", "space"}:
-            print("\033[2J\033[H", end="")
+            clear_screen()
             return choices[selected_index]
         if key in {"up", "left", "k", "h"}:
             selected_index = (selected_index - 1) % len(choices)
@@ -286,16 +286,16 @@ def choose_agent_interactive() -> str:
             selected_index = (selected_index + 1) % len(choices)
             continue
         if key == "1":
-            print("\033[2J\033[H", end="")
+            clear_screen()
             return "claude"
         if key == "2":
-            print("\033[2J\033[H", end="")
+            clear_screen()
             return "codex"
         if key in {"c"}:
-            print("\033[2J\033[H", end="")
+            clear_screen()
             return "claude"
         if key in {"x"}:
-            print("\033[2J\033[H", end="")
+            clear_screen()
             return "codex"
 
 
@@ -349,7 +349,7 @@ def display_path(path: Path, start: Path | None = None, home: Path | None = None
 
 
 def print_target_menu(selected_index: int, choices: tuple[TargetChoice, ...]) -> None:
-    print("\033[2J\033[H", end="")
+    clear_screen()
     print("? Edit which guidance file?")
     print("Use ↑/↓ or ←/→ to move, Enter/Space to select, Q to quit.")
     print()
@@ -373,10 +373,10 @@ def choose_target_interactive(choices: tuple[TargetChoice, ...]) -> TargetChoice
         print_target_menu(selected_index, choices)
         key = read_key()
         if key in {"q", "escape"}:
-            print("\033[2J\033[H", end="")
+            clear_screen()
             raise KeyboardInterrupt
         if key in {"enter", "space"}:
-            print("\033[2J\033[H", end="")
+            clear_screen()
             return choices[selected_index]
         if key in {"up", "left", "k", "h"}:
             selected_index = (selected_index - 1) % len(choices)
@@ -387,7 +387,7 @@ def choose_target_interactive(choices: tuple[TargetChoice, ...]) -> TargetChoice
         if key.isdigit():
             index = int(key) - 1
             if 0 <= index < len(choices):
-                print("\033[2J\033[H", end="")
+                clear_screen()
                 return choices[index]
 
 
@@ -1181,7 +1181,7 @@ def print_menu(
     original: str = "",
     feed_message: str | None = None,
 ) -> None:
-    print("\033[2J\033[H", end="")
+    clear_screen()
     print(f"fluffmods: {path}")
     print("Use ↑/↓ to move, space to toggle, D for details, E to erase custom stanzas, U to upgrade all, P to preview, Q to quit, enter/A to apply.")
     print()
@@ -1634,7 +1634,9 @@ def status_marker(ok: bool) -> str:
 
 
 def clear_screen() -> None:
-    print("\033[2J\033[H", end="", flush=True)
+    if not sys.stdout.isatty():
+        return
+    print("\033[2J\033[3J\033[H", end="", flush=True)
 
 
 def print_heuristic_apply_summary(enabled: set[str], options: tuple[Option, ...]) -> None:
@@ -2015,6 +2017,7 @@ def main(argv: list[str] | None = None) -> int:
 
     selected_enabled, selected_options = selected
     backup = apply_compiled_config(path, original, selected_enabled, selected_options)
+    clear_screen()
     print(f"Updated {path}")
     if backup:
         print(f"Backup: {backup}")

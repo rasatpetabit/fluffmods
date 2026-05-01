@@ -20,6 +20,7 @@ from fluffmods.cli import (
     choose_agent_interactive,
     choose_guidance_target,
     choose_target_path,
+    clear_screen,
     compile_claude_md,
     delete_option_with_confirmation,
     detect_enabled,
@@ -647,6 +648,15 @@ applies_to: robots
             print_apply_summary("claude", set(), tuple())
 
         self.assertIn("❌ Could not run claude analysis: boom", output.getvalue())
+
+    def test_clear_screen_clears_visible_screen_and_scrollback_for_tty(self) -> None:
+        stdout = StringIO()
+        stdout.isatty = lambda: True  # type: ignore[method-assign]
+
+        with patch("sys.stdout", stdout):
+            clear_screen()
+
+        self.assertEqual(stdout.getvalue(), "\033[2J\033[3J\033[H")
 
 
 class TargetSelectionTests(unittest.TestCase):
