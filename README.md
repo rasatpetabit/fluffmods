@@ -134,6 +134,7 @@ installed copy differs.
 These ship in the default `RAS list` feed.
 
 - `ask-user-directly`: Ask the user directly when input is needed.
+- `context-discipline`: Keep context usage disciplined in large ongoing work.
 - `codex-delegation` (`claude-only`): Automatically dispatch simple and well-defined coding tasks to Codex.
 - `verify-before-complete`: Require local verification before claiming implementation work is done.
 - `protect-user-work`: Treat existing uncommitted changes as user-owned.

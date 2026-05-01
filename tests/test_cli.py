@@ -220,6 +220,18 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertIn("do not delegate blocking work", option.body)
         self.assertIn("critical path moving locally", option.body)
 
+    def test_context_discipline_is_in_default_feed(self) -> None:
+        feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
+        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        option = next(item for item in all_options if item.option_id == "context-discipline")
+
+        self.assertEqual(option.applies_to, "generic")
+        self.assertEqual(option.label, "Keep context usage disciplined in large ongoing work")
+        self.assertEqual(option.updated_on, "2026-05-01")
+        self.assertIn("Treat context as scarce", option.body)
+        self.assertIn("Use subagents only for bounded, parallel work", option.body)
+        self.assertIn("The main thread owns final integration and verification", option.body)
+
     def test_feed_stanza_precedence_and_verification_safety_wording(self) -> None:
         feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
         all_options = load_options_from_feed_dir(feed_dir, "RAS list")

@@ -7,6 +7,7 @@
   "description": "Default fluffmods guidance stanzas curated by RAS.",
   "options": [
     "ask-user-directly.md",
+    "context-discipline.md",
     "codex-delegation.md",
     "verify-before-complete.md",
     "protect-user-work.md",
