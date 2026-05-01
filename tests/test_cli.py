@@ -468,7 +468,8 @@ applies_to: robots
         self.assertIn("Potential harmful directives", prompt)
         self.assertIn("Severity | Bar | Stanzas | Issue | Suggested fix", prompt)
         self.assertIn("Rate severity from 1 to 5", prompt)
-        self.assertIn("[###--]", prompt)
+        self.assertIn("five-symbol emoji bar", prompt)
+        self.assertIn("🟧🟧🟧⬜⬜", prompt)
         self.assertIn("Do not use long prose bullets", prompt)
         self.assertNotIn("malicious", prompt.lower())
         self.assertIn("audit-me", prompt)
@@ -524,6 +525,7 @@ applies_to: robots
             print_apply_summary("claude", set(), tuple())
 
         text = stdout.getvalue()
+        self.assertTrue(text.startswith("\nAI agent analysis"))
         self.assertIn("AI agent analysis (claude; this can take a moment, or hit Q to quit):", text)
         self.assertIn("✅ AI agent analysis completed.", text)
         self.assertIn("✅ Heuristic potential stanza conflicts:", text)
