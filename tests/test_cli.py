@@ -59,8 +59,8 @@ class ConfigCompileTests(unittest.TestCase):
         text = render_block({"codex-delegation", "exact-scope"})
 
         self.assertEqual(parse_enabled(text), {"codex-delegation", "exact-scope"})
-        self.assertIn("AI + FluffMods", text)
-        self.assertIn("ai-fluffmods", text)
+        self.assertIn("fluffmods", text)
+        self.assertNotIn("ai-fluffmods", text)
         self.assertIn("## Managed AI Agent Behavior Options", text)
         self.assertNotIn("## Managed Claude Behavior Options", text)
 
@@ -570,7 +570,7 @@ applies_to: robots
             [
                 "OpenAI Codex v0.125.0 (research preview)",
                 "user",
-                "Review these AI + FluffMods configuration stanzas before they are trusted",
+                "Review these fluffmods configuration stanzas before they are trusted",
                 "ERROR: Reconnecting... 5/5",
                 "ERROR: stream disconnected before completion: error sending request for url (https://api.openai.com/v1/responses)",
             ]
@@ -582,7 +582,7 @@ applies_to: robots
             summary,
             "ERROR: stream disconnected before completion: error sending request for url...",
         )
-        self.assertNotIn("Review these AI + FluffMods", summary)
+        self.assertNotIn("Review these fluffmods", summary)
 
     def test_run_agent_analysis_uses_target_agent_runner(self) -> None:
         calls = []

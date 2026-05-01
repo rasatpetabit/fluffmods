@@ -1,6 +1,6 @@
-# AI + FluffMods
+# fluffmods
 
-`AI + FluffMods` is a multi-agent guidance manager for turning long agent
+`fluffmods` is a multi-agent guidance manager for turning long agent
 behavior directives into simple on/off options. It supports Claude Code, Codex,
 and custom agent guidance files; ships with manicured built-in feeds of
 high-leverage directives; and lets users subscribe to additional feeds from
@@ -37,10 +37,10 @@ python3 -m pip install -e .
 Open the interactive menu:
 
 ```sh
-ai-fluffmods
+fluffmods
 ```
 
-If you run `ai-fluffmods` inside a project that already has `CLAUDE.md` or
+If you run `fluffmods` inside a project that already has `CLAUDE.md` or
 `.claude/CLAUDE.md`, it asks whether you want to edit that project guidance or
 your global `~/.claude/CLAUDE.md`.
 
@@ -60,56 +60,56 @@ lowercase commands are both accepted.
 Check current option state:
 
 ```sh
-ai-fluffmods --status
-ai-fluffmods --codex --status
+fluffmods --status
+fluffmods --codex --status
 ```
 
 Preview the generated guidance block:
 
 ```sh
-ai-fluffmods --preview
+fluffmods --preview
 ```
 
 Enable or disable options non-interactively:
 
 ```sh
-ai-fluffmods --enable codex-delegation --apply
-ai-fluffmods --disable codex-delegation --apply
-ai-fluffmods --codex --enable exact-scope --apply
-ai-fluffmods --upgrade
+fluffmods --enable codex-delegation --apply
+fluffmods --disable codex-delegation --apply
+fluffmods --codex --enable exact-scope --apply
+fluffmods --upgrade
 ```
 
 Use a different target file:
 
 ```sh
-ai-fluffmods --file ./CLAUDE.md --enable verify-before-complete --apply
+fluffmods --file ./CLAUDE.md --enable verify-before-complete --apply
 ```
 
 Skip the target prompt:
 
 ```sh
-ai-fluffmods --project
-ai-fluffmods --global
-ai-fluffmods --codex --project
-ai-fluffmods --codex --global
+fluffmods --project
+fluffmods --global
+fluffmods --codex --project
+fluffmods --codex --global
 ```
 
 Load custom stanza files from a directory:
 
 ```sh
-ai-fluffmods --options-dir ./my-claude-options --status
+fluffmods --options-dir ./my-claude-options --status
 ```
 
 Manage feeds:
 
 ```sh
-ai-fluffmods --feed-list
-ai-fluffmods --feed-add https://example.com/path/to/feed.json
-ai-fluffmods --feed-remove feed-id
-ai-fluffmods --feed-refresh
+fluffmods --feed-list
+fluffmods --feed-add https://example.com/path/to/feed.json
+fluffmods --feed-remove feed-id
+fluffmods --feed-refresh
 ```
 
-AI + FluffMods loads the currently installed feed cache immediately. In interactive
+fluffmods loads the currently installed feed cache immediately. In interactive
 mode, it checks enabled remote feeds in the background when a feed has not been
 refreshed for more than an hour, then tells you whether refresh succeeded or
 failed.
@@ -118,12 +118,12 @@ Configure automatic upgrades of existing guidance files to the latest feed
 versions:
 
 ```sh
-ai-fluffmods --auto-update-configs status
-ai-fluffmods --auto-update-configs on
-ai-fluffmods --auto-update-configs off
+fluffmods --auto-update-configs status
+fluffmods --auto-update-configs on
+fluffmods --auto-update-configs off
 ```
 
-Each feed stanza can include `version` and `updated_on` metadata. AI + FluffMods
+Each feed stanza can include `version` and `updated_on` metadata. fluffmods
 records that metadata in the managed block, compares older installs against the
 current feed body, and marks enabled stanzas with `refresh available` when the
 installed copy differs.
@@ -157,7 +157,7 @@ Custom options are Markdown files. Put them in either:
 Or point at a directory explicitly:
 
 ```sh
-ai-fluffmods --options-dir ./options
+fluffmods --options-dir ./options
 ```
 
 The simplest custom option uses the filename as the option id and the first
@@ -190,7 +190,7 @@ smaller commits or handoff tasks before continuing.
 
 The intended model is:
 
-- **Bundled stanzas:** useful defaults that ship with AI + FluffMods.
+- **Bundled stanzas:** useful defaults that ship with fluffmods.
 - **Custom stanzas:** your own reusable `CLAUDE.md` blocks, stored as Markdown
   files and toggled through the same interface.
 - **Adopted current stanzas:** future work will make it easy to extract existing
@@ -198,7 +198,7 @@ The intended model is:
 
 ## How It Works
 
-`AI + FluffMods` owns this block in whichever guidance file you choose:
+`fluffmods` owns this block in whichever guidance file you choose:
 
 ```md
 <!-- BEGIN FLUFF-MODS OPTIONS -->
@@ -223,7 +223,7 @@ If no managed block exists yet, the tool appends one.
   Codex config) to audit the selected stanzas for conflicts and harmful
   directives that may indicate a compromised feed. The local heuristic summary
   prints first, then the target agent runs in a fast/low-effort analysis mode.
-  The agent is asked for structured JSON, which AI + FluffMods renders as
+  The agent is asked for structured JSON, which fluffmods renders as
   compact terminal-friendly severity blocks with 1-5 ratings and emoji bars.
 
 ## License
