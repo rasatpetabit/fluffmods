@@ -61,9 +61,9 @@ from fluffmods.cli import (
 
 class ConfigCompileTests(unittest.TestCase):
     def test_parse_enabled_from_managed_block(self) -> None:
-        text = render_block({"codex-delegation", "exact-scope"})
+        text = render_block({"exact-scope", "verify-before-complete"})
 
-        self.assertEqual(parse_enabled(text), {"codex-delegation", "exact-scope"})
+        self.assertEqual(parse_enabled(text), {"exact-scope", "verify-before-complete"})
         self.assertIn("fluffmods", text)
         self.assertNotIn("ai-fluffmods", text)
         self.assertIn("## Managed AI Agent Behavior Options", text)
@@ -163,7 +163,7 @@ class ConfigCompileTests(unittest.TestCase):
     def test_compile_replaces_existing_managed_block(self) -> None:
         original = f"""# User Preferences
 
-{render_block({"codex-delegation"})}
+{render_block({"removed-option"})}
 **Use plugins and MCPs when they're available.**
 """
 
@@ -172,7 +172,7 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertIn(BEGIN, compiled)
         self.assertIn(END, compiled)
         self.assertIn("exact-scope", compiled)
-        self.assertNotIn("codex-delegation -->", compiled)
+        self.assertNotIn("removed-option -->", compiled)
         self.assertEqual(compiled.count(BEGIN), 1)
 
     def test_compile_inserts_block_before_anchor(self) -> None:
@@ -183,22 +183,22 @@ class ConfigCompileTests(unittest.TestCase):
 **Use plugins and MCPs when they're available.**
 """
 
-        compiled = compile_claude_md(original, {"codex-delegation"})
+        compiled = compile_claude_md(original, {"verify-before-complete"})
 
-        self.assertIn("## Codex Delegation Default", compiled)
-        self.assertEqual(compiled.count("## Codex Delegation Default"), 1)
+        self.assertIn("## Verification Before Completion", compiled)
+        self.assertEqual(compiled.count("## Verification Before Completion"), 1)
         self.assertLess(
             compiled.index(BEGIN),
             compiled.index("**Use plugins and MCPs when they're available.**"),
         )
 
-    def test_codex_delegation_is_claude_only(self) -> None:
+    def test_codex_delegation_is_not_a_default_option(self) -> None:
         all_options = load_options([], include_default_dirs=False)
 
         claude_ids = {option.option_id for option in options_for_agent(all_options, "claude")}
         codex_ids = {option.option_id for option in options_for_agent(all_options, "codex")}
 
-        self.assertIn("codex-delegation", claude_ids)
+        self.assertNotIn("codex-delegation", claude_ids)
         self.assertNotIn("codex-delegation", codex_ids)
 
     def test_ask_user_directly_is_in_default_feed(self) -> None:
@@ -241,11 +241,7 @@ class ConfigCompileTests(unittest.TestCase):
         all_options = load_options_from_feed_dir(feed_dir, "RAS-List")
         by_id = {option.option_id: option for option in all_options}
 
-        codex_delegation = by_id["codex-delegation"]
-        self.assertEqual(codex_delegation.updated_on, "2026-05-01")
-        self.assertIn("briefly self-evaluate", codex_delegation.body)
-        self.assertNotIn("briefly ask", codex_delegation.body)
-        self.assertIn("`ask-for-risky-actions` takes precedence", codex_delegation.body)
+        self.assertNotIn("codex-delegation", by_id)
 
         verify = by_id["verify-before-complete"]
         self.assertEqual(verify.updated_on, "2026-05-01")
@@ -627,7 +623,6 @@ applies_to: robots
         options = load_options_from_feed_dir(feed_dir, "RAS-List")
         enabled = {
             "ask-for-risky-actions",
-            "codex-delegation",
             "concise-final-report",
             "durable-handoff",
             "plan-complex-work",
@@ -691,9 +686,9 @@ applies_to: robots
   "potential_conflicts": [
     {
       "severity": 3,
-      "stanzas": ["ask-user-directly", "codex-delegation"],
-      "issue": "Delegation might be mistaken for a user prompt.",
-      "fix": "Clarify that delegation evaluation is internal."
+      "stanzas": ["ask-user-directly", "build-with-subagents"],
+      "issue": "Subagent dispatch might be mistaken for a user prompt.",
+      "fix": "Clarify that subagent dispatch evaluation is internal."
     }
   ],
   "potential_harmful_directives": [],
@@ -706,9 +701,9 @@ applies_to: robots
         self.assertNotIn("Potential harmful directives:", output)
         self.assertIn("🟧🟧🟧⬜⬜ Potential conflict, severity 3/5", output)
         self.assertNotIn("❌ 🟧🟧🟧⬜⬜ Potential conflict", output)
-        self.assertIn("Stanzas: ask-user-directly, codex-delegation", output)
-        self.assertIn("Issue: Delegation might be mistaken for a user prompt.", output)
-        self.assertIn("Fix: Clarify that delegation evaluation is internal.", output)
+        self.assertIn("Stanzas: ask-user-directly, build-with-subagents", output)
+        self.assertIn("Issue: Subagent dispatch might be mistaken for a user prompt.", output)
+        self.assertIn("Fix: Clarify that subagent dispatch evaluation is internal.", output)
         self.assertIn("\n\n✅ No potential harmful directives detected.", output)
         self.assertIn("✅ No potential harmful directives detected.\n\nOverall recommendation: Safe to adopt", output)
 

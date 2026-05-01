@@ -16,7 +16,6 @@ The default RAS-List feed ships with these rules:
 
 - `ask-user-directly`: Ask short, concrete questions with clear options when user input is genuinely needed.
 - `context-discipline`: Keep large ongoing work focused by using targeted reads, concise summaries, bounded subagents, and durable handoff notes when context gets high.
-- `codex-delegation`: For Claude-only workflows, delegate small, well-scoped, locally verifiable coding tasks to Codex while Claude keeps orchestration and review.
 - `verify-before-complete`: Run the most relevant safe local verification before claiming implementation work is done, or report exactly why verification could not run.
 - `protect-user-work`: Treat existing uncommitted changes as user-owned and avoid reverting, overwriting, or cleaning up unrelated work.
 - `review-findings-first`: Lead code reviews with severity-ordered findings grounded in file paths and line numbers, keeping summaries secondary.
@@ -93,8 +92,8 @@ fluffmods --preview
 Enable or disable options non-interactively:
 
 ```sh
-fluffmods --enable codex-delegation --apply
-fluffmods --disable codex-delegation --apply
+fluffmods --enable verify-before-complete --apply
+fluffmods --disable verify-before-complete --apply
 fluffmods --codex --enable exact-scope --apply
 fluffmods --upgrade
 fluffmods --self-upgrade
@@ -163,7 +162,6 @@ These ship in the default `RAS-List` feed.
 
 - `ask-user-directly`: Ask the user directly when input is needed.
 - `context-discipline`: Keep context usage disciplined in large ongoing work.
-- `codex-delegation` (`claude-only`): Automatically dispatch simple and well-defined coding tasks to Codex.
 - `verify-before-complete`: Require local verification before claiming implementation work is done.
 - `protect-user-work`: Treat existing uncommitted changes as user-owned.
 - `review-findings-first`: Use findings-first format for code reviews.
