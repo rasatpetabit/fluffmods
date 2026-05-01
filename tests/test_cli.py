@@ -513,11 +513,12 @@ applies_to: robots
 
         self.assertNotIn("Potential conflicts:", output)
         self.assertNotIn("Potential harmful directives:", output)
-        self.assertIn("❌ 🟧🟧🟧⬜⬜ Potential conflict, severity 3/5", output)
+        self.assertIn("🟧🟧🟧⬜⬜ Potential conflict, severity 3/5", output)
+        self.assertNotIn("❌ 🟧🟧🟧⬜⬜ Potential conflict", output)
         self.assertIn("Stanzas: ask-user-interactively, codex-delegation", output)
         self.assertIn("Issue: Delegation might be mistaken for a user prompt.", output)
         self.assertIn("Fix: Clarify that delegation evaluation is internal.", output)
-        self.assertIn("✅ No potential harmful directives detected.", output)
+        self.assertIn("\n\n✅ No potential harmful directives detected.", output)
         self.assertIn("Overall recommendation: Safe to adopt", output)
 
     def test_agent_analysis_json_renders_clean_none_rows(self) -> None:
@@ -618,7 +619,7 @@ applies_to: robots
         self.assertTrue(text.startswith("\nHeuristic analysis:"))
         self.assertLess(text.index("Heuristic analysis:"), text.index("AI agent analysis"))
         self.assertIn("AI agent analysis (claude; fast model, this can take a moment, or hit Q to quit):", text)
-        self.assertIn("✅ AI agent analysis completed.", text)
+        self.assertNotIn("AI agent analysis completed", text)
         self.assertIn("✅ No potential stanza conflicts detected.", text)
         self.assertIn("✅ No potential harmful feed directives detected.", text)
         self.assertIn("Looks good.", text)

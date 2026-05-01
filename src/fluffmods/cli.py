@@ -1521,11 +1521,11 @@ def compact_text(value: object, width: int = 100) -> str:
     return textwrap.shorten(text, width=width, placeholder="...")
 
 
-def render_agent_findings(singular: str, plural: str, findings: object) -> list[str]:
+def render_agent_findings(singular: str, plural: str, findings: object) -> tuple[list[str], bool]:
     lines: list[str] = []
     if not isinstance(findings, list) or not findings:
         lines.append(f"{status_marker(True)} No {plural} detected.")
-        return lines
+        return lines, False
 
     for index, finding in enumerate(findings):
         if index:
@@ -1537,11 +1537,11 @@ def render_agent_findings(singular: str, plural: str, findings: object) -> list[
             stanza_text = ", ".join(compact_text(stanza, 40) for stanza in stanzas if str(stanza).strip())
         else:
             stanza_text = compact_text(stanzas, 80)
-        lines.append(f"{status_marker(False)} {SEVERITY_BARS[severity]} {singular}, severity {severity}/5")
+        lines.append(f"{SEVERITY_BARS[severity]} {singular}, severity {severity}/5")
         lines.append(f"   Stanzas: {stanza_text or 'unknown'}")
         lines.append(f"   Issue: {compact_text(item.get('issue'))}")
         lines.append(f"   Fix: {compact_text(item.get('fix'))}")
-    return lines
+    return lines, True
 
 
 def format_agent_analysis(output: str) -> str:
@@ -1550,8 +1550,20 @@ def format_agent_analysis(output: str) -> str:
         return output
 
     lines: list[str] = []
-    lines.extend(render_agent_findings("Potential conflict", "potential conflicts", data.get("potential_conflicts")))
-    lines.extend(render_agent_findings("Potential harmful directive", "potential harmful directives", data.get("potential_harmful_directives")))
+    conflict_lines, has_conflicts = render_agent_findings(
+        "Potential conflict",
+        "potential conflicts",
+        data.get("potential_conflicts"),
+    )
+    harmful_lines, has_harmful = render_agent_findings(
+        "Potential harmful directive",
+        "potential harmful directives",
+        data.get("potential_harmful_directives"),
+    )
+    lines.extend(conflict_lines)
+    if has_conflicts or has_harmful:
+        lines.append("")
+    lines.extend(harmful_lines)
     recommendation = compact_text(data.get("overall_recommendation"), 180)
     if recommendation != "None provided.":
         lines.append(f"Overall recommendation: {recommendation}")
@@ -1648,7 +1660,6 @@ def print_apply_summary(agent: str, enabled: set[str], options: tuple[Option, ..
         print(f"AI agent analysis ({agent}; fast model):", flush=True)
     try:
         analysis = run_agent_analysis_with_quit(agent, enabled, options)
-        print(f"{status_marker(True)} AI agent analysis completed.")
         print(format_agent_analysis(analysis))
     except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
         print(f"{status_marker(False)} Could not run {agent} analysis: {exc}")
