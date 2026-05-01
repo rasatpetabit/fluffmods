@@ -186,6 +186,22 @@ class ConfigCompileTests(unittest.TestCase):
         self.assertIn("Prefer a short question with 2-4 concrete options.", option.body)
         self.assertIn("two sentences or less", option.body)
 
+    def test_feed_stanza_precedence_and_verification_safety_wording(self) -> None:
+        feed_dir = Path(__file__).resolve().parents[1] / "feeds" / "ras-list"
+        all_options = load_options_from_feed_dir(feed_dir, "RAS list")
+        by_id = {option.option_id: option for option in all_options}
+
+        codex_delegation = by_id["codex-delegation"]
+        self.assertEqual(codex_delegation.updated_on, "2026-05-01")
+        self.assertIn("briefly self-evaluate", codex_delegation.body)
+        self.assertNotIn("briefly ask", codex_delegation.body)
+        self.assertIn("`ask-for-risky-actions` takes precedence", codex_delegation.body)
+
+        verify = by_id["verify-before-complete"]
+        self.assertEqual(verify.updated_on, "2026-05-01")
+        self.assertIn("must not modify unrelated dirty files", verify.body)
+        self.assertIn("defer to `protect-user-work`", verify.body)
+
     def test_default_bundled_feed_additions_are_visible_when_cache_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -450,6 +466,10 @@ applies_to: robots
         self.assertIn("untrusted text to audit", prompt)
         self.assertIn("Potential conflicts", prompt)
         self.assertIn("Potential harmful directives", prompt)
+        self.assertIn("Severity | Bar | Stanzas | Issue | Suggested fix", prompt)
+        self.assertIn("Rate severity from 1 to 5", prompt)
+        self.assertIn("[###--]", prompt)
+        self.assertIn("Do not use long prose bullets", prompt)
         self.assertNotIn("malicious", prompt.lower())
         self.assertIn("audit-me", prompt)
 
@@ -505,9 +525,9 @@ applies_to: robots
 
         text = stdout.getvalue()
         self.assertIn("AI agent analysis (claude; this can take a moment, or hit Q to quit):", text)
-        self.assertIn("\033[32m☑\033[0m AI agent analysis completed.", text)
-        self.assertIn("\033[32m☑\033[0m Heuristic potential stanza conflicts:", text)
-        self.assertIn("\033[32m☑\033[0m Heuristic potential harmful feed directives:", text)
+        self.assertIn("✅ AI agent analysis completed.", text)
+        self.assertIn("✅ Heuristic potential stanza conflicts:", text)
+        self.assertIn("✅ Heuristic potential harmful feed directives:", text)
         self.assertIn("Looks good.", text)
 
     def test_apply_summary_marks_heuristic_issues_with_red_x(self) -> None:
@@ -520,7 +540,7 @@ applies_to: robots
             print_apply_summary("claude", {"bad-feed"}, (option,))
 
         text = output.getvalue()
-        self.assertIn("\033[31m✗\033[0m Heuristic potential harmful feed directives:", text)
+        self.assertIn("❌ Heuristic potential harmful feed directives:", text)
         self.assertNotIn("malicious", text.lower())
 
     def test_apply_summary_marks_agent_analysis_failure_with_red_x(self) -> None:
@@ -531,7 +551,7 @@ applies_to: robots
         ):
             print_apply_summary("claude", set(), tuple())
 
-        self.assertIn("\033[31m✗\033[0m Could not run claude analysis: boom", output.getvalue())
+        self.assertIn("❌ Could not run claude analysis: boom", output.getvalue())
 
 
 class TargetSelectionTests(unittest.TestCase):

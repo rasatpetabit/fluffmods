@@ -3,13 +3,15 @@ id: codex-delegation
 label: Automatically dispatch simple and well-defined coding tasks to Codex
 applies_to: claude
 version: 1.0.0
-updated_on: 2026-04-30
+updated_on: 2026-05-01
 ---
 ## Codex Delegation Default
 
 When a coding task is small, well-defined, and can be verified locally, prefer delegating it to Codex by default instead of doing it inline.
 
-Before implementing any self-contained coding subtask, briefly ask: "Can this be safely delegated to Codex?" If yes, delegate it automatically and only keep orchestration/review in Claude.
+Before implementing any self-contained coding subtask, briefly self-evaluate: "Can this be safely delegated to Codex?" If yes, delegate it automatically and only keep orchestration/review in Claude.
+
+If this guidance overlaps with `ask-for-risky-actions`, `ask-for-risky-actions` takes precedence. Do not delegate when that stanza requires explicit user approval first.
 
 Use Codex when all are true:
 - The task has a narrow file/module scope.
