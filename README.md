@@ -54,9 +54,9 @@ selected agent.
 
 The menu supports arrow-key navigation. Use up/down arrows to move, space to
 toggle an option, `D` to view the complete stanza, `E` to erase a custom stanza
-after confirmation, `U` to upgrade all enabled stanzas to the latest feed
-versions, `P` to preview, `Q` to quit, and enter or `A` to apply. Uppercase and
-lowercase commands are both accepted.
+after confirmation, `R` to refresh feeds now, `U` to refresh feeds and upgrade
+all enabled stanzas to the latest feed versions, `P` to preview, `Q` to quit,
+and enter or `A` to apply. Uppercase and lowercase commands are both accepted.
 
 Check current option state:
 
@@ -78,6 +78,7 @@ fluffmods --enable codex-delegation --apply
 fluffmods --disable codex-delegation --apply
 fluffmods --codex --enable exact-scope --apply
 fluffmods --upgrade
+fluffmods --self-upgrade
 ```
 
 Use a different target file:
@@ -110,12 +111,18 @@ fluffmods --feed-remove feed-id
 fluffmods --feed-refresh
 ```
 
-fluffmods loads the currently installed feed cache immediately. In interactive
-mode, it checks enabled remote feeds in the background when a feed has not been
-refreshed for more than an hour, then tells you whether refresh succeeded or
-failed. Non-interactive commands refresh due feeds synchronously before loading
-options. If an `--enable` or `--disable` id is unknown, fluffmods forces one feed
-refresh and retries before reporting the id as unknown.
+fluffmods loads the currently installed feed cache immediately, then refreshes
+enabled remote feeds unless `--no-feed-refresh` is set. In interactive mode it
+checks feeds in the background and reloads options when refresh succeeds. Use
+`R` to refresh feeds without applying changes, or `U` to refresh feeds and
+rewrite enabled stanzas from the latest feed bodies. Non-interactive commands
+refresh feeds synchronously before loading options. If an `--enable` or
+`--disable` id is unknown, fluffmods forces one feed refresh and retries before
+reporting the id as unknown.
+
+`--self-upgrade` reinstalls fluffmods from GitHub using `uv` or `pipx` when one
+is available. Older installed copies that do not include `--self-upgrade` still
+need one manual reinstall before they can upgrade themselves.
 
 Configure automatic upgrades of existing guidance files to the latest feed
 versions:

@@ -5,6 +5,7 @@ import json
 import queue
 import re
 import select
+import shlex
 import shutil
 import subprocess
 import sys
@@ -33,6 +34,7 @@ APPLIES_TO_ALIASES = {
     "codex-only": "codex",
 }
 DEFAULT_RAS_FEED_URL = "https://raw.githubusercontent.com/rasatpetabit/fluffmods/main/feeds/ras-list/feed.json"
+SELF_UPGRADE_SPEC = "git+https://github.com/rasatpetabit/fluffmods.git"
 FEED_REFRESH_INTERVAL_SECONDS = 60 * 60
 
 
@@ -712,6 +714,16 @@ def print_feed_refresh_messages(result: FeedRefreshResult, *, stream=None) -> No
         print(message, file=target)
 
 
+def feed_refresh_status_message(result: FeedRefreshResult) -> str:
+    if result.messages:
+        return " | ".join(result.messages)
+    if result.refreshed:
+        return "Feeds refreshed."
+    if result.failed:
+        return "Feed refresh failed."
+    return "Feeds are already current."
+
+
 def start_feed_refresh_thread(force: bool = False) -> queue.Queue[FeedRefreshResult] | None:
     if not force and not any(
         feed.enabled and feed_refresh_due(feed) for feed in load_feed_subscriptions()
@@ -1257,7 +1269,7 @@ def print_menu(
 ) -> None:
     clear_screen()
     print(f"fluffmods: {path}")
-    print("Use ↑/↓ to move, space to toggle, D for details, E to erase custom stanzas, U to upgrade all, P to preview, Q to quit, enter/A to apply.")
+    print("Use ↑/↓ to move, space to toggle, D for details, E to erase custom stanzas, R to refresh feeds, U to refresh + upgrade, P to preview, Q to quit, enter/A to apply.")
     print()
 
     if not options:
@@ -1794,6 +1806,14 @@ def interactive(
 ) -> tuple[set[str], tuple[Option, ...]] | None:
     feed_message = "Checking feeds in the background..." if feed_results else None
 
+    def refresh_options_now() -> None:
+        nonlocal feed_message, options, selected_index
+        result = refresh_due_feeds(force=True)
+        feed_message = feed_refresh_status_message(result)
+        if result.refreshed and reload_options:
+            options = reload_options()
+            selected_index = min(selected_index, max(len(options) - 1, 0))
+
     if sys.stdin.isatty() and sys.stdout.isatty():
         selected_index = 0
         while True:
@@ -1804,14 +1824,7 @@ def interactive(
                     pass
                 else:
                     feed_results = None
-                    if result.messages:
-                        feed_message = " | ".join(result.messages)
-                    elif result.refreshed:
-                        feed_message = "Feeds refreshed."
-                    elif result.failed:
-                        feed_message = "Feed refresh failed."
-                    else:
-                        feed_message = "Feeds are already current."
+                    feed_message = feed_refresh_status_message(result)
                     if result.refreshed and reload_options:
                         options = reload_options()
                         selected_index = min(selected_index, max(len(options) - 1, 0))
@@ -1829,7 +1842,15 @@ def interactive(
                 return enabled, options
             if key in {"u", "U"}:
                 clear_screen()
+                print("Refreshing feeds before upgrading enabled stanzas...")
+                refresh_options_now()
+                clear_screen()
                 return enabled, options
+            if key in {"r", "R"}:
+                clear_screen()
+                print("Refreshing feeds...")
+                refresh_options_now()
+                continue
             if key == "p":
                 clear_screen()
                 print(render_block(enabled, options))
@@ -1878,10 +1899,12 @@ def interactive(
                     continue
 
     print(f"fluffmods: {path}")
-    print("Toggle options by number. Commands: d <number>=details, e <number>=erase custom stanza, p=preview, a=apply, u=upgrade all, q=quit")
+    print("Toggle options by number. Commands: d <number>=details, e <number>=erase custom stanza, r=refresh feeds, p=preview, a=apply, u=refresh + upgrade, q=quit")
 
     while True:
         print()
+        if feed_message:
+            print(feed_message)
         print_status(enabled, options, original)
         choice = input("\nChoice: ").strip().lower()
 
@@ -1890,7 +1913,18 @@ def interactive(
         if choice in {"a", "apply"}:
             return enabled, options
         if choice in {"u", "upgrade"}:
+            result = refresh_due_feeds(force=True)
+            feed_message = feed_refresh_status_message(result)
+            print(feed_message)
+            if result.refreshed and reload_options:
+                options = reload_options()
             return enabled, options
+        if choice in {"r", "refresh"}:
+            result = refresh_due_feeds(force=True)
+            feed_message = feed_refresh_status_message(result)
+            if result.refreshed and reload_options:
+                options = reload_options()
+            continue
         if choice in {"p", "preview"}:
             print()
             print(render_block(enabled, options))
@@ -1938,6 +1972,39 @@ def interactive(
         print("Enter an option number, p, a, or q.")
 
 
+def detect_self_upgrade_command() -> list[str] | None:
+    uv = shutil.which("uv")
+    pipx = shutil.which("pipx")
+    executable_context = f"{sys.executable} {sys.prefix}"
+
+    if uv and (
+        "/uv/tools/fluffmods/" in executable_context
+        or "/.local/share/uv/tools/fluffmods/" in executable_context
+    ):
+        return [uv, "tool", "install", "--force", SELF_UPGRADE_SPEC]
+    if pipx and "/pipx/venvs/fluffmods/" in executable_context:
+        return [pipx, "install", "--force", SELF_UPGRADE_SPEC]
+    if uv:
+        return [uv, "tool", "install", "--force", SELF_UPGRADE_SPEC]
+    if pipx:
+        return [pipx, "install", "--force", SELF_UPGRADE_SPEC]
+    return None
+
+
+def run_self_upgrade(
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> int:
+    command = detect_self_upgrade_command()
+    if command is None:
+        print("Could not find uv or pipx for self-upgrade.", file=sys.stderr)
+        print(f"Install manually with: pipx install --force {SELF_UPGRADE_SPEC}", file=sys.stderr)
+        return 1
+
+    print(f"Running: {shlex.join(command)}")
+    completed = runner(command)
+    return completed.returncode
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -1980,6 +2047,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--feed-name", help="Override the name when adding a feed")
     parser.add_argument("--feed-refresh", action="store_true", help="Refresh subscribed feeds now")
     parser.add_argument("--no-feed-refresh", action="store_true", help="Skip background feed refresh")
+    parser.add_argument("--self-upgrade", action="store_true", help="Reinstall fluffmods from GitHub using uv or pipx")
     parser.add_argument(
         "--auto-update-configs",
         choices=("on", "off", "status"),
@@ -1997,6 +2065,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.assume_global and args.assume_project:
         parser.error("--global and --project are mutually exclusive")
+
+    if args.self_upgrade:
+        return finish(run_self_upgrade())
 
     if args.auto_update_configs:
         if args.auto_update_configs == "status":
@@ -2036,9 +2107,9 @@ def main(argv: list[str] | None = None) -> int:
     interactive_mode = not (args.status or args.preview or args.apply or args.upgrade)
     feed_results = None
     if interactive_mode and not args.no_feed_refresh:
-        feed_results = start_feed_refresh_thread()
+        feed_results = start_feed_refresh_thread(force=True)
     elif not args.no_feed_refresh:
-        result = refresh_due_feeds()
+        result = refresh_due_feeds(force=True)
         if result.messages:
             print_feed_refresh_messages(result, stream=sys.stderr)
 

@@ -26,7 +26,9 @@ from fluffmods.cli import (
     delete_option_with_confirmation,
     detect_enabled,
     display_path,
+    detect_self_upgrade_command,
     infer_enabled_from_text,
+    interactive,
     format_agent_analysis,
     global_guidance_path,
     load_options_from_feed_dir,
@@ -48,6 +50,7 @@ from fluffmods.cli import (
     recover_enabled_from_backups,
     potential_conflicts,
     render_block,
+    run_self_upgrade,
     run_agent_analysis,
     suspicious_directives,
     target_choices,
@@ -660,6 +663,8 @@ applies_to: robots
         text = output.getvalue()
         self.assertIn("  1. [ ] exact-scope - Honor exact file and task scope literally  (feed:RAS list)", text)
         self.assertIn(">  2. [ ] claude-only - Claude-only behavior  (claude-only, feed:RAS list)", text)
+        self.assertIn("R to refresh feeds", text)
+        self.assertIn("U to refresh + upgrade", text)
         self.assertNotIn("generic", text)
         self.assertNotIn("refresh selected", text)
 
@@ -845,6 +850,162 @@ applies_to: robots
         self.assertEqual(stdout.getvalue(), "\033[2J\033[3J\033[H")
 
 
+class InteractiveMenuTests(unittest.TestCase):
+    def test_interactive_refresh_key_forces_feed_refresh_and_reloads_options(self) -> None:
+        stdout = StringIO()
+        stdout.isatty = lambda: True  # type: ignore[method-assign]
+        old_option = Option("old-option", "Old Option", "# Old")
+        new_option = Option("new-option", "New Option", "# New")
+        refresh_forces = []
+
+        def fake_refresh(force: bool = False) -> FeedRefreshResult:
+            refresh_forces.append(force)
+            return FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",))
+
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("sys.stdout", stdout),
+            patch("fluffmods.cli.read_key", side_effect=["r", "enter"]),
+            patch("fluffmods.cli.refresh_due_feeds", side_effect=fake_refresh),
+        ):
+            selected = interactive(
+                Path("/tmp/CLAUDE.md"),
+                "",
+                set(),
+                (old_option,),
+                reload_options=lambda: (new_option,),
+            )
+
+        self.assertEqual(refresh_forces, [True])
+        self.assertEqual(selected, (set(), (new_option,)))
+        self.assertIn("Refreshed feed: RAS list", stdout.getvalue())
+
+    def test_interactive_upgrade_key_refreshes_before_returning_options(self) -> None:
+        stdout = StringIO()
+        stdout.isatty = lambda: True  # type: ignore[method-assign]
+        old_option = Option("old-option", "Old Option", "# Old")
+        new_option = Option("new-option", "New Option", "# New")
+
+        with (
+            patch("sys.stdin.isatty", return_value=True),
+            patch("sys.stdout", stdout),
+            patch("fluffmods.cli.read_key", return_value="u"),
+            patch(
+                "fluffmods.cli.refresh_due_feeds",
+                return_value=FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",)),
+            ) as refresh_mock,
+        ):
+            selected = interactive(
+                Path("/tmp/CLAUDE.md"),
+                "",
+                set(),
+                (old_option,),
+                reload_options=lambda: (new_option,),
+            )
+
+        refresh_mock.assert_called_once_with(force=True)
+        self.assertEqual(selected, (set(), (new_option,)))
+
+    def test_non_tty_refresh_command_reloads_options_without_applying(self) -> None:
+        old_option = Option("old-option", "Old Option", "# Old")
+        new_option = Option("new-option", "New Option", "# New")
+
+        with (
+            patch("sys.stdin.isatty", return_value=False),
+            patch("sys.stdout", new_callable=StringIO) as output,
+            patch("builtins.input", side_effect=["r", "a"]),
+            patch(
+                "fluffmods.cli.refresh_due_feeds",
+                return_value=FeedRefreshResult(refreshed=True, failed=False, messages=("Refreshed feed: RAS list",)),
+            ) as refresh_mock,
+        ):
+            selected = interactive(
+                Path("/tmp/CLAUDE.md"),
+                "",
+                set(),
+                (old_option,),
+                reload_options=lambda: (new_option,),
+            )
+
+        refresh_mock.assert_called_once_with(force=True)
+        self.assertEqual(selected, (set(), (new_option,)))
+        self.assertIn("Refreshed feed: RAS list", output.getvalue())
+
+
+class SelfUpgradeTests(unittest.TestCase):
+    def test_detect_self_upgrade_command_prefers_uv_for_uv_tool_installs(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return f"/usr/local/bin/{name}" if name in {"uv", "pipx"} else None
+
+        with (
+            patch("fluffmods.cli.shutil.which", side_effect=fake_which),
+            patch("fluffmods.cli.sys.executable", "/Users/ras/.local/share/uv/tools/fluffmods/bin/python"),
+            patch("fluffmods.cli.sys.prefix", "/Users/ras/.local/share/uv/tools/fluffmods"),
+        ):
+            command = detect_self_upgrade_command()
+
+        self.assertEqual(
+            command,
+            [
+                "/usr/local/bin/uv",
+                "tool",
+                "install",
+                "--force",
+                "git+https://github.com/rasatpetabit/fluffmods.git",
+            ],
+        )
+
+    def test_detect_self_upgrade_command_uses_pipx_for_pipx_installs(self) -> None:
+        def fake_which(name: str) -> str | None:
+            return "/usr/local/bin/pipx" if name == "pipx" else None
+
+        with (
+            patch("fluffmods.cli.shutil.which", side_effect=fake_which),
+            patch("fluffmods.cli.sys.executable", "/Users/ras/.local/pipx/venvs/fluffmods/bin/python"),
+            patch("fluffmods.cli.sys.prefix", "/Users/ras/.local/pipx/venvs/fluffmods"),
+        ):
+            command = detect_self_upgrade_command()
+
+        self.assertEqual(
+            command,
+            [
+                "/usr/local/bin/pipx",
+                "install",
+                "--force",
+                "git+https://github.com/rasatpetabit/fluffmods.git",
+            ],
+        )
+
+    def test_run_self_upgrade_runs_detected_command(self) -> None:
+        calls = []
+
+        def fake_runner(command):
+            calls.append(command)
+            return subprocess.CompletedProcess(command, 0)
+
+        command = ["pipx", "install", "--force", "git+https://github.com/rasatpetabit/fluffmods.git"]
+
+        with (
+            patch("fluffmods.cli.detect_self_upgrade_command", return_value=command),
+            patch("sys.stdout", new_callable=StringIO) as output,
+        ):
+            self.assertEqual(run_self_upgrade(runner=fake_runner), 0)
+
+        self.assertEqual(calls, [command])
+        self.assertIn("Running: pipx install --force", output.getvalue())
+
+    def test_main_self_upgrade_exits_after_upgrade_attempt(self) -> None:
+        with (
+            patch("fluffmods.cli.run_self_upgrade", return_value=0) as upgrade_mock,
+            patch("fluffmods.cli.choose_guidance_target") as choose_mock,
+            patch("sys.stdout", new_callable=StringIO),
+        ):
+            self.assertEqual(main(["--self-upgrade"]), 0)
+
+        upgrade_mock.assert_called_once_with()
+        choose_mock.assert_not_called()
+
+
 class TargetSelectionTests(unittest.TestCase):
     def test_choose_agent_prompts_when_unspecified(self) -> None:
         prompts = []
@@ -919,7 +1080,7 @@ class TargetSelectionTests(unittest.TestCase):
     def test_main_starts_feed_refresh_before_target_selection(self) -> None:
         events = []
 
-        def fake_refresh():
+        def fake_refresh(force: bool = False):
             events.append("refresh")
             return None
 
@@ -994,7 +1155,7 @@ class TargetSelectionTests(unittest.TestCase):
                 )
 
         self.assertEqual(load_calls, 2)
-        self.assertEqual(refresh_forces, [False, True])
+        self.assertEqual(refresh_forces, [True, True])
         self.assertIn("# Context Discipline", output.getvalue())
 
     def test_no_feed_refresh_preserves_unknown_option_failure(self) -> None:
