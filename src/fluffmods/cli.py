@@ -1570,6 +1570,7 @@ def format_agent_analysis(output: str) -> str:
     lines.extend(harmful_lines)
     recommendation = compact_text(data.get("overall_recommendation"), 180)
     if recommendation != "None provided.":
+        lines.append("")
         lines.append(f"Overall recommendation: {recommendation}")
     return "\n".join(lines)
 

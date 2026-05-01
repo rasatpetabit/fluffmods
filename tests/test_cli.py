@@ -520,7 +520,7 @@ applies_to: robots
         self.assertIn("Issue: Delegation might be mistaken for a user prompt.", output)
         self.assertIn("Fix: Clarify that delegation evaluation is internal.", output)
         self.assertIn("\n\n✅ No potential harmful directives detected.", output)
-        self.assertIn("Overall recommendation: Safe to adopt", output)
+        self.assertIn("✅ No potential harmful directives detected.\n\nOverall recommendation: Safe to adopt", output)
 
     def test_agent_analysis_json_renders_clean_none_rows(self) -> None:
         output = format_agent_analysis(
@@ -539,6 +539,7 @@ applies_to: robots
                 [
                     "✅ No potential conflicts detected.",
                     "✅ No potential harmful directives detected.",
+                    "",
                     "Overall recommendation: Safe to adopt.",
                 ]
             ),
