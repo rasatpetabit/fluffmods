@@ -672,6 +672,22 @@ class TargetSelectionTests(unittest.TestCase):
                 (child_file.resolve(), parent_file.resolve()),
             )
 
+    def test_project_guidance_paths_skips_home_directory_candidates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            home = Path(tmp) / "home"
+            project = home / "dev" / "project"
+            project.mkdir(parents=True)
+            home_agents = home / "AGENTS.md"
+            project_agents = project / "AGENTS.md"
+            home_agents.write_text("# Home", encoding="utf-8")
+            project_agents.write_text("# Project", encoding="utf-8")
+
+            with patch("pathlib.Path.home", return_value=home):
+                self.assertEqual(
+                    project_guidance_paths("codex", project),
+                    (project_agents.resolve(),),
+                )
+
     def test_target_choices_include_project_and_global_for_each_agent(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -692,8 +708,8 @@ class TargetSelectionTests(unittest.TestCase):
                 [(choice.agent, choice.location, choice.path) for choice in choices],
                 [
                     ("claude", "global", claude_global),
-                    ("codex", "global", codex_global),
                     ("claude", "project", claude_project.resolve()),
+                    ("codex", "global", codex_global),
                     ("codex", "project", codex_project.resolve()),
                 ],
             )

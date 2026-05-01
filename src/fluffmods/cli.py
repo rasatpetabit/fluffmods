@@ -313,8 +313,6 @@ def target_choices(agents: tuple[str, ...] = AGENTS, start: Path | None = None) 
         global_path, _ = global_paths[agent]
         location = "global" if global_path.exists() else "global default"
         choices.append(TargetChoice(agent=agent, location=location, path=global_path))
-
-    for agent in agents:
         _, resolved_global = global_paths[agent]
         for project_path in project_guidance_paths(agent, start):
             if project_path == resolved_global:
@@ -768,10 +766,13 @@ def project_guidance_paths(agent: str, start: Path | None = None) -> tuple[Path,
     current = (start or Path.cwd()).resolve()
     if current.is_file():
         current = current.parent
+    home = Path.home().resolve()
 
     paths: list[Path] = []
     seen: set[Path] = set()
     for directory in (current, *current.parents):
+        if directory == home:
+            continue
         for candidate in project_guidance_candidates(directory, agent):
             if not candidate.exists():
                 continue
